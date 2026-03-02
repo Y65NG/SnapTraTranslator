@@ -86,11 +86,25 @@ struct TranslationBridgeView: View {
         Locale.Language(identifier: settings.targetLanguage)
     }
 
+    init(bridge: TranslationBridge, settings: SettingsStore) {
+        self.bridge = bridge
+        self.settings = settings
+        // Initialize configuration immediately to ensure translationTask works
+        // even when window is hidden (onAppear won't fire until window is shown)
+        _configuration = State(initialValue: TranslationSession.Configuration(
+            source: Locale.Language(identifier: settings.sourceLanguage),
+            target: Locale.Language(identifier: settings.targetLanguage)
+        ))
+    }
+
     var body: some View {
         Color.clear
             .frame(width: 0, height: 0)
             .onAppear {
-                configuration = TranslationSession.Configuration(source: sourceLocale, target: targetLocale)
+                // Ensure configuration is set (defensive, should already be set in init)
+                if configuration == nil {
+                    configuration = TranslationSession.Configuration(source: sourceLocale, target: targetLocale)
+                }
             }
             .onChange(of: settings.sourceLanguage) { _, _ in
                 resetConfiguration()
