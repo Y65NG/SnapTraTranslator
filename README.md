@@ -44,6 +44,10 @@ Chinese (Simplified), Chinese (Traditional), English, Japanese, Korean, French, 
 - **Language pack detection** - Automatically checks and prompts for missing language packs
 - **Menu bar app** - Runs quietly in the menu bar without cluttering your dock
 
+## Download
+
+Available on the [Mac App Store](https://apps.apple.com/cn/app/snaptra-translator/id6757981764)
+
 ## Requirements
 
 - macOS 14+ (translation features require macOS 15 for system Translation APIs)
