@@ -190,7 +190,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
         // About
         let aboutItem = NSMenuItem(
-            title: NSLocalizedString("About", comment: "About menu item"),
+            title: NSLocalizedString("About SnapTra", comment: "About menu item"),
             action: #selector(openAbout),
             keyEquivalent: ""
         )
@@ -199,7 +199,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
         // Quit
         let quitItem = NSMenuItem(
-            title: NSLocalizedString("Quit SnapTra", comment: "Quit menu item"),
+            title: NSLocalizedString("Quit", comment: "Quit menu item"),
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         )
