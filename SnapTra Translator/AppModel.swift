@@ -84,6 +84,21 @@ final class AppModel: ObservableObject {
         self.translationBridge = TranslationBridge()
         self.dictionaryDownload = DictionaryDownloadManager(offlineService: dictionaryService.offlineService)
         self.wordNetDownload = WordNetDownloadManager(wordNetService: dictionaryService.wordNetService)
+
+        // Forward DictionaryDownloadManager changes to AppModel so SwiftUI redraws
+        self.dictionaryDownload.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
+        // Forward WordNetDownloadManager changes to AppModel so SwiftUI redraws
+        self.wordNetDownload.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
         if #available(macOS 15.0, *) {
             let manager = LanguagePackManager()
             self.languagePackManager = manager
