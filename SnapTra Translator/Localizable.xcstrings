@@ -156,7 +156,7 @@
         }
       }
     },
-    "Apple System Voice" : {
+    "Apple" : {
 
     },
     "Arabic" : {
@@ -229,7 +229,7 @@
         }
       }
     },
-    "Baidu Translate" : {
+    "Baidu" : {
 
     },
     "Behavior" : {
@@ -273,7 +273,7 @@
     "Best quality, WebSocket based" : {
 
     },
-    "Bing Translate" : {
+    "Bing" : {
 
     },
     "Cancel" : {
@@ -841,7 +841,7 @@
         }
       }
     },
-    "Edge (Microsoft)" : {
+    "Edge" : {
 
     },
     "Enable Screen Recording" : {
@@ -1038,7 +1038,7 @@
     "Good quality, requires signature" : {
 
     },
-    "Google Translate" : {
+    "Google" : {
 
     },
     "Granted" : {
@@ -3166,7 +3166,7 @@
     "Works offline" : {
 
     },
-    "Youdao Dictionary" : {
+    "Youdao" : {
 
     }
   },
