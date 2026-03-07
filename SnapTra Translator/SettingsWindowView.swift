@@ -53,7 +53,7 @@ struct SettingsWindowView: View {
                 selectedTab = tab
             }
         }
-        .frame(width: 370, height: 500)
+        .frame(width: 370, height: 600)
         .padding()
     }
 }

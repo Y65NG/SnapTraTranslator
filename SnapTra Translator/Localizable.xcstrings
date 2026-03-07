@@ -270,6 +270,9 @@
     "Best quality, requires token" : {
 
     },
+    "Best quality, WebSocket based" : {
+
+    },
     "Bing Translate" : {
 
     },
@@ -837,6 +840,9 @@
           }
         }
       }
+    },
+    "Edge (Microsoft)" : {
+
     },
     "Enable Screen Recording" : {
       "localizations" : {

@@ -373,7 +373,7 @@ final class SettingsWindowController: NSWindowController {
         let contentView = SettingsWindowView(initialTab: initialTab)
             .environmentObject(model)
         let hostingView = NSHostingView(rootView: contentView)
-        hostingView.frame = NSRect(x: 0, y: 0, width: 370, height: 500)
+        hostingView.frame = NSRect(x: 0, y: 0, width: 370, height: 600)
 
         let window = NSWindow(
             contentRect: hostingView.frame,
