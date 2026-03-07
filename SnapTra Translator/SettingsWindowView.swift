@@ -14,6 +14,10 @@ enum SettingsTab: String, CaseIterable {
     case about = "About"
 }
 
+extension Notification.Name {
+    static let switchSettingsTab = Notification.Name("switchSettingsTab")
+}
+
 struct SettingsWindowView: View {
     @EnvironmentObject var model: AppModel
     @State private var selectedTab: SettingsTab
@@ -43,6 +47,11 @@ struct SettingsWindowView: View {
                     Label(String(localized: "About"), systemImage: "info.circle")
                 }
                 .tag(SettingsTab.about)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .switchSettingsTab)) { notification in
+            if let tab = notification.object as? SettingsTab {
+                selectedTab = tab
+            }
         }
         .frame(minWidth: 427, minHeight: 400)
         .padding()

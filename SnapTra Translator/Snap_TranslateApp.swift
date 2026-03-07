@@ -263,6 +263,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         isManualWindowOpen = true
         NSApp.setActivationPolicy(.regular)
         if let window = settingsWindow, window.isVisible {
+            NotificationCenter.default.post(name: .switchSettingsTab, object: initialTab)
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
         } else {
