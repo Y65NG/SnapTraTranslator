@@ -342,7 +342,7 @@ struct OverlayView: View {
             return "vt."
         case "vi", "intransitive verb":
             return "vi."
-        case "adj", "adjective":
+        case "adj", "adjective", "a":
             return "adj."
         case "adv", "adverb":
             return "adv."
@@ -392,7 +392,7 @@ struct OverlayView: View {
             return Color(red: 0.2, green: 0.78, blue: 0.35)  // Modern green
         case "vi.", "vi", "intransitive verb":
             return Color(red: 0.2, green: 0.78, blue: 0.35)  // Modern green
-        case "adj.", "adj", "adjective":
+        case "adj.", "adj", "adjective", "a", "a.":
             return Color(red: 1.0, green: 0.58, blue: 0.0)  // Vibrant orange
         case "adv.", "adv", "adverb":
             return Color(red: 0.69, green: 0.32, blue: 0.87)  // Modern purple

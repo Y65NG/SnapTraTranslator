@@ -160,7 +160,7 @@ final class OfflineDictionaryService {
 
     /// Splits "n. 苹果" → ("n.", "苹果"). Returns ("", original) if no POS prefix found.
     private func extractPOSAndMeaning(_ line: String) -> (String, String) {
-        let pattern = #"^(n\.|vt\.|vi\.|v\.|adj\.|adv\.|prep\.|conj\.|pron\.|interj\.|num\.|art\.|abbr\.)\s*"#
+        let pattern = #"^(n\.|vt\.|vi\.|v\.|a\.|adj\.|adv\.|prep\.|conj\.|pron\.|interj\.|num\.|art\.|abbr\.)\s*"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
               let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
               let posRange = Range(match.range(at: 1), in: line),
