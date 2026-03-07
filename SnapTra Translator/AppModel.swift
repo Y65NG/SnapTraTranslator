@@ -296,7 +296,12 @@ final class AppModel: ObservableObject {
             let targetLanguage = Locale.Language(identifier: settings.targetLanguage)
             if settings.playPronunciation {
                 let languageCode = sourceLanguage.languageCode?.identifier
-                speechService.speak(selected.text, language: languageCode)
+                speechService.speak(
+                    selected.text,
+                    language: languageCode,
+                    provider: settings.ttsProvider,
+                    useAmericanAccent: true
+                )
             }
             guard !Task.isCancelled, activeLookupID == lookupID else { return }
 

@@ -29,6 +29,9 @@ final class SettingsStore: ObservableObject {
             saveDictionarySources()
         }
     }
+    @Published var ttsProvider: TTSProvider {
+        didSet { defaults.set(ttsProvider.rawValue, forKey: AppSettingKey.ttsProvider) }
+    }
 
     private let defaults: UserDefaults
     private static let dictionarySourcesKey = "dictionarySources"
@@ -53,6 +56,10 @@ final class SettingsStore: ObservableObject {
 
         // Load or migrate dictionary sources
         dictionarySources = Self.loadOrMigrateDictionarySources(defaults: defaults)
+        
+        // Load TTS provider
+        let ttsProviderValue = defaults.string(forKey: AppSettingKey.ttsProvider)
+        ttsProvider = TTSProvider(rawValue: ttsProviderValue ?? "apple") ?? .apple
     }
 
     private static func loadOrMigrateDictionarySources(defaults: UserDefaults) -> [DictionarySource] {

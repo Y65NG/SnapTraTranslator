@@ -74,6 +74,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
             .store(in: &cancellables)
 
+        model.settings.$playPronunciation
+            .combineLatest(model.settings.$ttsProvider)
+            .sink { [weak self] _, _ in
+                self?.updateDynamicMenuItems()
+            }
+            .store(in: &cancellables)
+
         model.settings.$sourceLanguage
             .combineLatest(model.settings.$targetLanguage)
             .sink { [weak self] _, _ in
@@ -215,9 +222,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     private func updateDynamicMenuItems() {
-        // Update pronunciation menu item
+        // Update pronunciation menu item with provider info
+        let provider = model.settings.ttsProvider
+        let providerName = provider == .apple
+            ? NSLocalizedString("System", comment: "System TTS provider")
+            : provider.displayName
         let pronunciationTitle = model.settings.playPronunciation
-            ? NSLocalizedString("Pronunciation: On", comment: "Pronunciation toggle on")
+            ? String(format: NSLocalizedString("Pronunciation: On (%@)", comment: "Pronunciation toggle on with provider"), providerName)
             : NSLocalizedString("Pronunciation: Off", comment: "Pronunciation toggle off")
         pronunciationMenuItem?.title = pronunciationTitle
 

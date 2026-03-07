@@ -156,6 +156,9 @@
         }
       }
     },
+    "Apple System Voice" : {
+
+    },
     "Arabic" : {
       "comment" : "Language name - use native name",
       "extractionState" : "stale",
@@ -226,6 +229,9 @@
         }
       }
     },
+    "Baidu Translate" : {
+
+    },
     "Behavior" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -260,6 +266,12 @@
           }
         }
       }
+    },
+    "Best quality, requires token" : {
+
+    },
+    "Bing Translate" : {
+
     },
     "Cancel" : {
       "localizations" : {
@@ -1017,6 +1029,12 @@
     "Get a larger offline dictionary for fuller meanings and better technical terms." : {
 
     },
+    "Good quality, requires signature" : {
+
+    },
+    "Google Translate" : {
+
+    },
     "Granted" : {
       "localizations" : {
         "en" : {
@@ -1751,6 +1769,9 @@
         }
       }
     },
+    "No token required, supports UK/US accent" : {
+
+    },
     "No word detected" : {
       "localizations" : {
         "en" : {
@@ -1999,6 +2020,9 @@
     "Powered by ECDICT" : {
 
     },
+    "Pronunciation Service" : {
+
+    },
     "Pronunciation: Off" : {
       "comment" : "Pronunciation toggle off",
       "localizations" : {
@@ -2036,6 +2060,7 @@
     },
     "Pronunciation: On" : {
       "comment" : "Pronunciation toggle on",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2068,6 +2093,9 @@
           }
         }
       }
+    },
+    "Pronunciation: On (%@)" : {
+      "comment" : "Pronunciation toggle on with provider"
     },
     "Quit" : {
       "comment" : "Quit menu item",
@@ -2767,6 +2795,12 @@
         }
       }
     },
+    "System" : {
+      "comment" : "System TTS provider"
+    },
+    "System built-in, works offline" : {
+
+    },
     "System Dictionary" : {
       "comment" : "System dictionary name"
     },
@@ -3124,6 +3158,9 @@
 
     },
     "Works offline" : {
+
+    },
+    "Youdao Dictionary" : {
 
     }
   },

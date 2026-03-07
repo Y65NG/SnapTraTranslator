@@ -137,6 +137,16 @@ struct GeneralSettingsView: View {
                         isOn: $model.settings.playPronunciation
                     )
 
+                    if model.settings.playPronunciation {
+                        Divider()
+                            .padding(.horizontal, 14)
+                            .opacity(0.5)
+
+                        TTSProviderPickerRow(
+                            provider: $model.settings.ttsProvider
+                        )
+                    }
+
                     Divider()
                         .padding(.horizontal, 14)
                         .opacity(0.5)
@@ -445,5 +455,35 @@ struct GeneralTranslationLanguageRow: View {
             missingLanguagesMessage = String(localized: "The language pack for \(sourceName) → \(targetName) translation is not installed. Please download the required language packs in System Settings > General > Language & Region > Translation Languages.")
             showingUnavailableAlert = true
         }
+    }
+}
+
+// MARK: - TTS Provider Picker
+
+struct TTSProviderPickerRow: View {
+    @Binding var provider: TTSProvider
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(String(localized: "Pronunciation Service"))
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(.primary)
+                Text(provider.description)
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundStyle(.tertiary)
+            }
+            Spacer()
+            Picker("", selection: $provider) {
+                ForEach(TTSProvider.allCases) { p in
+                    Text(p.displayName).tag(p)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .frame(width: 140)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
     }
 }
