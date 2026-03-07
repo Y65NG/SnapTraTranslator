@@ -57,6 +57,7 @@ final class AppModel: ObservableObject {
     private let dictionaryService = DictionaryService()
     private let speechService = SpeechService()
     let dictionaryDownload: DictionaryDownloadManager
+    let wordNetDownload: WordNetDownloadManager
     private var cancellables = Set<AnyCancellable>()
     private var lookupTask: Task<Void, Never>?
     private var activeLookupID: UUID?
@@ -82,6 +83,7 @@ final class AppModel: ObservableObject {
         self.permissions = resolvedPermissions
         self.translationBridge = TranslationBridge()
         self.dictionaryDownload = DictionaryDownloadManager(offlineService: dictionaryService.offlineService)
+        self.wordNetDownload = WordNetDownloadManager(wordNetService: dictionaryService.wordNetService)
         if #available(macOS 15.0, *) {
             let manager = LanguagePackManager()
             self.languagePackManager = manager

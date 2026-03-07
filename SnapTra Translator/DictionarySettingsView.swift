@@ -54,6 +54,12 @@ struct DictionarySettingsView: View {
                 enableECDICTSource()
             }
 
+            // WordNet Download Section
+            WordNetDownloadSection(manager: model.wordNetDownload) {
+                // Callback when download starts - enable WordNet source
+                enableWordNetSource()
+            }
+
             Spacer()
         }
         .padding()
@@ -65,6 +71,14 @@ struct DictionarySettingsView: View {
     private func enableECDICTSource() {
         // Find and enable the ECDICT source
         if let index = sources.firstIndex(where: { $0.type == .ecdict }) {
+            sources[index].isEnabled = true
+            updateSources()
+        }
+    }
+
+    private func enableWordNetSource() {
+        // Find and enable the WordNet source
+        if let index = sources.firstIndex(where: { $0.type == .wordNet }) {
             sources[index].isEnabled = true
             updateSources()
         }
@@ -137,6 +151,119 @@ struct ECDICTDownloadSection: View {
                     Text(String(localized: "Advanced English Dictionary"))
                         .font(.system(size: 14, weight: .medium))
                     Text(String(localized: "ECDICT - Comprehensive offline dictionary"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                statusView
+            }
+
+            if case .error(let message) = manager.state {
+                Text(message)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color.red.opacity(0.1))
+                    )
+            }
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.background)
+                .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 2)
+                .shadow(color: .black.opacity(0.02), radius: 1, x: 0, y: 1)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(.quaternary, lineWidth: 0.5)
+        )
+    }
+
+    @ViewBuilder
+    private var statusView: some View {
+        switch manager.state {
+        case .notInstalled:
+            Button(String(localized: "Download")) {
+                onDownloadStart?()
+                manager.startDownload()
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+
+        case .downloading(let progress):
+            HStack(spacing: 8) {
+                ProgressView(value: progress)
+                    .progressViewStyle(.linear)
+                    .frame(width: 60)
+                Text("\(Int(progress * 100))%")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                Button(String(localized: "Cancel")) {
+                    manager.cancelDownload()
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+            }
+
+        case .installing:
+            HStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.small)
+                    .scaleEffect(0.7)
+                Text(String(localized: "Installing..."))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+
+        case .installed(let sizeMB):
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                Text(String(format: "%.1f MB", sizeMB))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                Button(String(localized: "Delete")) {
+                    manager.delete()
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+                .foregroundStyle(.red)
+            }
+
+        case .error:
+            Button(String(localized: "Retry")) {
+                onDownloadStart?()
+                manager.retry()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+    }
+}
+
+// MARK: - WordNet Download Section
+
+struct WordNetDownloadSection: View {
+    @ObservedObject var manager: WordNetDownloadManager
+    var onDownloadStart: (() -> Void)?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "character.book.closed")
+                    .font(.system(size: 20))
+                    .foregroundStyle(.purple)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(String(localized: "WordNet Dictionary"))
+                        .font(.system(size: 14, weight: .medium))
+                    Text(String(localized: "English definitions, examples, and synonyms"))
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }
