@@ -25,7 +25,7 @@ final class SpeechService {
         case .apple:
             logger.info("🎵 Using Apple System Voice")
             speakWithApple(text, language: language)
-        case .youdao, .bing, .google, .baidu, .edge:
+        case .youdao, .bing, .google, .baidu:
             logger.info("🌐 Using online TTS: \(provider.displayName)")
             Task {
                 await speakWithOnlineService(
@@ -154,7 +154,6 @@ final class SpeechService {
 final class TTSServiceFactory {
     private let youdaoService = YoudaoTTSService()
     private let bingService = BingTTSService()
-    private let edgeService = EdgeTTSService()
     private let googleService = GoogleTTSService()
     private let baiduService = BaiduTTSService()
     
@@ -173,11 +172,6 @@ final class TTSServiceFactory {
             )
         case .bing:
             return try await bingService.fetchAudio(
-                text: text,
-                language: language
-            )
-        case .edge:
-            return try await edgeService.fetchAudio(
                 text: text,
                 language: language
             )

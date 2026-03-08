@@ -41,7 +41,6 @@ enum TTSProvider: String, CaseIterable, Identifiable {
     case apple = "apple"
     case youdao = "youdao"
     case bing = "bing"
-    case edge = "edge"
     case google = "google"
     case baidu = "baidu"
 
@@ -55,8 +54,6 @@ enum TTSProvider: String, CaseIterable, Identifiable {
             return L("Youdao")
         case .bing:
             return L("Bing")
-        case .edge:
-            return L("Edge")
         case .google:
             return L("Google")
         case .baidu:
@@ -75,8 +72,6 @@ enum TTSProvider: String, CaseIterable, Identifiable {
         case .youdao:
             return L("No token required, supports UK/US accent")
         case .bing:
-            return L("Best quality, requires token")
-        case .edge:
             return L("Best quality, WebSocket based")
         case .google:
             return L("Good quality, requires signature")

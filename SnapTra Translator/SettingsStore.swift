@@ -74,8 +74,9 @@ final class SettingsStore: ObservableObject {
         // Load or migrate dictionary sources
         dictionarySources = Self.loadOrMigrateDictionarySources(defaults: defaults)
         
-        // Load TTS provider
-        let ttsProviderValue = defaults.string(forKey: AppSettingKey.ttsProvider)
+        // Load TTS provider (migrate removed "edge" → "bing")
+        var ttsProviderValue = defaults.string(forKey: AppSettingKey.ttsProvider)
+        if ttsProviderValue == "edge" { ttsProviderValue = "bing" }
         ttsProvider = TTSProvider(rawValue: ttsProviderValue ?? "apple") ?? .apple
         
         // Load app language
