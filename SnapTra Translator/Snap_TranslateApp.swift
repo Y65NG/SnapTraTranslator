@@ -295,8 +295,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NSApp.setActivationPolicy(.regular)
         if let window = settingsWindow, window.isVisible {
             NotificationCenter.default.post(name: .switchSettingsTab, object: initialTab)
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+            // Defer activation to after the status bar menu fully closes,
+            // otherwise makeKeyAndOrderFront may fail while the menu is dismissing.
+            DispatchQueue.main.async {
+                window.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
+            }
         } else {
             showSettingsWindow(initialTab: initialTab)
         }
