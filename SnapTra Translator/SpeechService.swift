@@ -375,28 +375,22 @@ final class BaiduTTSService {
     }
 }
 
-// MARK: - Edge TTS Service (Fixed WebSocket Implementation)
+// MARK: - Edge TTS Service
 
 final class EdgeTTSService {
     private let logger = Logger(subsystem: "com.yelog.SnapTra-Translator", category: "EdgeTTS")
     private let trustedClientToken = "6A5AA1D4EAFF4E9FB37E23D68491D6F4"
-    
-    func fetchAudio(
-        text: String,
-        language: String?
-    ) async throws -> Data {
+
+    func fetchAudio(text: String, language: String?) async throws -> Data {
         logger.info("🌐 Starting Edge TTS WebSocket connection...")
 
-        // Each connection requires a unique ConnectionId (matches edge-tts Python spec)
         let connectionId = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
         let wsURL = "wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1"
             + "?TrustedClientToken=\(trustedClientToken)"
             + "&Retry-After=3600"
             + "&ConnectionId=\(connectionId)"
 
-        guard let url = URL(string: wsURL) else {
-            throw TTSError.invalidURL
-        }
+        guard let url = URL(string: wsURL) else { throw TTSError.invalidURL }
 
         var request = URLRequest(url: url)
         request.setValue(
@@ -408,111 +402,104 @@ final class EdgeTTSService {
         request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
         request.setValue("en-US,en;q=0.9", forHTTPHeaderField: "Accept-Language")
         request.setValue(connectionId, forHTTPHeaderField: "X-ConnectionId")
-        
-        let webSocketTask = URLSession.shared.webSocketTask(with: request)
-        
-        return try await withCheckedThrowingContinuation { continuation in
-            Task {
-                do {
-                    var audioData = Data()
-                    let voiceName = self.getVoiceName(language: language)
-                    let ssml = self.generateSSML(text: text, voiceName: voiceName)
-                    
-                    logger.info("🔌 Connecting to WebSocket...")
-                    webSocketTask.resume()
-                    
-                    // Wait for connection
-                    try await Task.sleep(nanoseconds: 200_000_000) // 0.2s
-                    
-                    // Send config message
-                    let configMessage = self.createConfigMessage()
-                    logger.debug("📤 Sending config message")
-                    try await webSocketTask.send(.string(configMessage))
-                    
-                    // Send SSML message
-                    let ssmlMessage = self.createSSMLMessage(ssml: ssml)
-                    logger.debug("📤 Sending SSML message")
-                    try await webSocketTask.send(.string(ssmlMessage))
-                    
-                    logger.info("⏳ Waiting for audio data...")
 
-                    // Receive audio data with timeout
-                    let startTime = Date()
-                    var isComplete = false
-                    var messageCount = 0
+        let wsTask = URLSession.shared.webSocketTask(with: request)
+        wsTask.resume()
 
-                    while !isComplete && Date().timeIntervalSince(startTime) < 30 { // 30s timeout
-                        do {
-                            let message = try await webSocketTask.receive()
-                            messageCount += 1
+        // Use task group for a hard 30-second timeout that cancels receive().
+        // The old Date-comparison loop only checked timeout *between* receive() calls,
+        // so a silently-idle server would block forever.
+        return try await withThrowingTaskGroup(of: Data.self) { group in
+            group.addTask {
+                defer { wsTask.cancel(with: .normalClosure, reason: nil) }
 
-                            switch message {
-                            case .data(let data):
-                                // Edge TTS binary frame structure:
-                                //   [2 bytes: header length N (big-endian uint16)]
-                                //   [N bytes: text header, e.g. "Path:audio\r\n..."]
-                                //   [remaining bytes: actual MP3 audio data]
-                                guard data.count >= 2 else { break }
-                                let headerLen = (Int(data[0]) << 8) | Int(data[1])
-                                let headerEnd = 2 + headerLen
-                                guard headerEnd <= data.count else { break }
-                                let headerData = data[2..<headerEnd]
-                                guard let headerText = String(data: headerData, encoding: .utf8) else { break }
+                // URLSession queues sends until the WebSocket handshake completes.
+                // No artificial sleep needed — if the handshake fails, send() throws.
+                try await wsTask.send(.string(self.createConfigMessage()))
+                self.logger.debug("📤 Config sent")
 
-                                if headerText.contains("Path:audio") && headerEnd < data.count {
-                                    // Strip the binary header, append only the raw MP3 bytes
-                                    audioData.append(contentsOf: data[headerEnd...])
-                                    logger.debug("🎵 Audio chunk: \(data.count - headerEnd) bytes (total: \(audioData.count))")
-                                } else if headerText.contains("Path:turn.end") {
-                                    logger.info("✅ Received turn.end (binary)")
-                                    isComplete = true
-                                }
+                let voiceName = self.getVoiceName(language: language)
+                let ssml = self.generateSSML(text: text, voiceName: voiceName)
+                try await wsTask.send(.string(self.createSSMLMessage(ssml: ssml)))
+                self.logger.debug("📤 SSML sent")
 
-                            case .string(let text):
-                                logger.debug("📨 Received string message (#\(messageCount)): \(text.prefix(100))")
-                                if text.contains("Path:turn.end") {
-                                    logger.info("✅ Received turn.end signal")
-                                    isComplete = true
-                                }
-                            }
-
-                            // Safety check
-                            if audioData.count > 10_000_000 { // 10MB limit
-                                logger.warning("⚠️ Audio data exceeds 10MB, stopping")
-                                isComplete = true
-                            }
-                        } catch {
-                            logger.error("❌ WebSocket receive error: \(error)")
-                            break
-                        }
-                    }
-                    
-                    webSocketTask.cancel(with: .normalClosure, reason: nil)
-                    
-                    logger.info("📊 Total messages received: \(messageCount)")
-                    logger.info("📊 Total audio data: \(audioData.count) bytes")
-                    
-                    if audioData.count > 0 {
-                        logger.info("✅ Edge TTS: Successfully received audio")
-                        continuation.resume(returning: audioData)
-                    } else {
-                        logger.error("❌ No audio data received")
-                        throw TTSError.invalidResponse
-                    }
-                    
-                } catch {
-                    webSocketTask.cancel(with: .normalClosure, reason: nil)
-                    logger.error("❌ Edge TTS error: \(error)")
-                    continuation.resume(throwing: error)
-                }
+                self.logger.info("⏳ Receiving audio frames...")
+                return try await self.receiveAudio(from: wsTask)
             }
+
+            // Hard timeout: cancels the receive task, which makes receive() throw CancellationError
+            group.addTask {
+                try await Task.sleep(nanoseconds: 30_000_000_000)
+                self.logger.error("⏰ Edge TTS timed out after 30s")
+                throw TTSError.networkError(URLError(.timedOut))
+            }
+
+            defer { group.cancelAll() }
+            guard let result = try await group.next() else {
+                throw TTSError.invalidResponse
+            }
+            return result
         }
     }
-    
+
+    /// Reads binary WebSocket frames from Edge TTS and assembles raw MP3 bytes.
+    ///
+    /// Edge TTS binary frame layout:
+    ///   [2 bytes big-endian: header length N]
+    ///   [N bytes: text header containing "Path:audio" or "Path:turn.end"]
+    ///   [remaining bytes: MP3 audio payload]
+    private func receiveAudio(from wsTask: URLSessionWebSocketTask) async throws -> Data {
+        var audioData = Data()
+        var messageCount = 0
+
+        receiveLoop: while true {
+            let message = try await wsTask.receive()
+            messageCount += 1
+
+            switch message {
+            case .data(let data):
+                guard data.count >= 2 else { continue receiveLoop }
+                let headerLen = (Int(data[0]) << 8) | Int(data[1])
+                let headerEnd  = 2 + headerLen
+                guard headerEnd <= data.count,
+                      let header = String(data: data[2..<headerEnd], encoding: .utf8)
+                else { continue receiveLoop }
+
+                if header.contains("Path:audio"), headerEnd < data.count {
+                    audioData.append(contentsOf: data[headerEnd...])
+                    logger.debug("🎵 chunk \(data.count - headerEnd)B  total \(audioData.count)B")
+                } else if header.contains("Path:turn.end") {
+                    logger.info("✅ turn.end (binary) after \(messageCount) msgs")
+                    break receiveLoop
+                }
+
+                if audioData.count > 10_000_000 {
+                    logger.warning("⚠️ >10 MB audio, stopping")
+                    break receiveLoop
+                }
+
+            case .string(let text):
+                logger.debug("📨 text msg \(messageCount): \(text.prefix(80))")
+                if text.contains("Path:turn.end") {
+                    logger.info("✅ turn.end (text) after \(messageCount) msgs")
+                    break receiveLoop
+                }
+
+            @unknown default:
+                break
+            }
+        }
+
+        logger.info("📊 total audio: \(audioData.count) bytes")
+        guard !audioData.isEmpty else {
+            logger.error("❌ No audio data received")
+            throw TTSError.invalidResponse
+        }
+        return audioData
+    }
+
     private func createConfigMessage() -> String {
-        let timestamp = getTimestamp()
-        // context must be a dictionary (not an array) — matches edge-tts Python spec:
-        // {"context":{"synthesis":{"audio":{"metadataoptions":{...},"outputFormat":"..."}}}}
+        // context is a dictionary (not an array) — matches edge-tts Python spec
         let config: [String: Any] = [
             "context": [
                 "synthesis": [
@@ -526,52 +513,48 @@ final class EdgeTTSService {
                 ],
             ],
         ]
-        let configData = try! JSONSerialization.data(withJSONObject: config)
-        let configString = String(data: configData, encoding: .utf8)!
-        return "X-Timestamp:\(timestamp)\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n\(configString)"
+        let json = String(data: try! JSONSerialization.data(withJSONObject: config), encoding: .utf8)!
+        return "X-Timestamp:\(getTimestamp())\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n\(json)"
     }
-    
+
     private func createSSMLMessage(ssml: String) -> String {
-        let timestamp = getTimestamp()
-        let requestId = UUID().uuidString.lowercased()
-        
-        return "X-Timestamp:\(timestamp)\r\nContent-Type:application/ssml+xml\r\nX-RequestId:\(requestId)\r\nPath:ssml\r\n\r\n\(ssml)"
+        let requestId = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+        return "X-Timestamp:\(getTimestamp())\r\nContent-Type:application/ssml+xml\r\nX-RequestId:\(requestId)\r\nPath:ssml\r\n\r\n\(ssml)"
     }
-    
+
     private func generateSSML(text: String, voiceName: String) -> String {
-        let escapedText = text
+        let escaped = text
             .replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
-        
-        return "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'><voice name='\(voiceName)'><prosody pitch='+0Hz' rate='+0%' volume='+0%'>\(escapedText)</prosody></voice></speak>"
+        return "<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'>"
+            + "<voice name='\(voiceName)'>"
+            + "<prosody pitch='+0Hz' rate='+0%' volume='+0%'>\(escaped)</prosody>"
+            + "</voice></speak>"
     }
-    
+
     private func getVoiceName(language: String?) -> String {
-        let langCode = language ?? "en"
-        
         let voiceMap: [String: String] = [
-            "en": "en-US-AriaNeural",
-            "zh": "zh-CN-XiaoxiaoNeural",
+            "en":      "en-US-AriaNeural",
+            "zh":      "zh-CN-XiaoxiaoNeural",
             "zh-Hans": "zh-CN-XiaoxiaoNeural",
             "zh-Hant": "zh-TW-HsiaoChenNeural",
-            "ja": "ja-JP-NanamiNeural",
-            "ko": "ko-KR-SunHiNeural",
-            "fr": "fr-FR-DeniseNeural",
-            "de": "de-DE-KatjaNeural",
-            "es": "es-ES-ElviraNeural",
-            "it": "it-IT-ElsaNeural",
-            "pt": "pt-BR-FranciscaNeural",
-            "ru": "ru-RU-SvetlanaNeural",
+            "ja":      "ja-JP-NanamiNeural",
+            "ko":      "ko-KR-SunHiNeural",
+            "fr":      "fr-FR-DeniseNeural",
+            "de":      "de-DE-KatjaNeural",
+            "es":      "es-ES-ElviraNeural",
+            "it":      "it-IT-ElsaNeural",
+            "pt":      "pt-BR-FranciscaNeural",
+            "ru":      "ru-RU-SvetlanaNeural",
         ]
-        
-        return voiceMap[langCode] ?? "en-US-AriaNeural"
+        return voiceMap[language ?? "en"] ?? "en-US-AriaNeural"
     }
-    
+
     private func getTimestamp() -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.string(from: Date())
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f.string(from: Date())
     }
 }
 
