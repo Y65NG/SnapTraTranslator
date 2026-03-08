@@ -397,10 +397,12 @@ final class SettingsWindowController: NSWindowController {
         let contentView = SettingsWindowView(initialTab: initialTab)
             .environmentObject(model)
         let hostingView = NSHostingView(rootView: contentView)
-        hostingView.frame = NSRect(x: 0, y: 0, width: 370, height: 570)
+        let initialContentSize = SettingsWindowLayout.windowContentSize(for: initialTab)
+        let initialContentRect = NSRect(origin: .zero, size: initialContentSize)
+        hostingView.frame = initialContentRect
 
         let window = NSWindow(
-            contentRect: hostingView.frame,
+            contentRect: initialContentRect,
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false

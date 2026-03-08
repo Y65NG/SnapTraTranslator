@@ -5,6 +5,7 @@
 //  Settings window with tabbed interface (General, Dictionary, About).
 //
 
+import AppKit
 import SwiftUI
 import Translation
 
@@ -18,10 +19,32 @@ extension Notification.Name {
     static let switchSettingsTab = Notification.Name("switchSettingsTab")
 }
 
+enum SettingsWindowLayout {
+    static let contentWidth: CGFloat = 370
+    static let baseContentHeight: CGFloat = 620
+    static let dictionaryContentHeightIncrease: CGFloat = 200
+    static let outerPadding: CGFloat = 16
+    static let animationDuration: TimeInterval = 0.24
+
+    static func contentHeight(for tab: SettingsTab) -> CGFloat {
+        baseContentHeight + (tab == .dictionary ? dictionaryContentHeightIncrease : 0)
+    }
+
+    static func windowContentSize(for tab: SettingsTab) -> CGSize {
+        CGSize(
+            width: contentWidth + (outerPadding * 2),
+            height: contentHeight(for: tab) + (outerPadding * 2)
+        )
+    }
+}
+
 struct SettingsWindowView: View {
     @EnvironmentObject var model: AppModel
     @State private var selectedTab: SettingsTab
     @State private var languageRefreshToken = UUID()
+    @State private var hidesDictionaryScrollIndicator = false
+    @State private var scrollIndicatorResetWorkItem: DispatchWorkItem?
+    @State private var window: NSWindow?
     var initialTab: SettingsTab = .general
 
     init(initialTab: SettingsTab = .general) {
@@ -37,7 +60,9 @@ struct SettingsWindowView: View {
                 }
                 .tag(SettingsTab.general)
 
-            DictionarySettingsView()
+            DictionarySettingsView(
+                hidesScrollIndicator: hidesDictionaryScrollIndicator
+            )
                 .tabItem {
                     Label(L("Dictionary"), systemImage: "books.vertical")
                 }
@@ -49,18 +74,103 @@ struct SettingsWindowView: View {
                 }
                 .tag(SettingsTab.about)
         }
+        .background(
+            SettingsWindowAccessor(window: $window)
+        )
         .onReceive(NotificationCenter.default.publisher(for: .switchSettingsTab)) { notification in
             if let tab = notification.object as? SettingsTab {
-                selectedTab = tab
+                withAnimation(.easeInOut(duration: SettingsWindowLayout.animationDuration)) {
+                    selectedTab = tab
+                }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .languageChanged)) { _ in
             // Force refresh when language changes
             languageRefreshToken = UUID()
         }
+        .onAppear {
+            updateDictionaryScrollIndicator(for: selectedTab, animated: false)
+            resizeWindow(for: selectedTab, animated: false)
+        }
+        .onChange(of: selectedTab) { newValue in
+            updateDictionaryScrollIndicator(for: newValue, animated: true)
+            resizeWindow(for: newValue, animated: true)
+        }
+        .onDisappear {
+            scrollIndicatorResetWorkItem?.cancel()
+        }
         .id(languageRefreshToken)
-        .frame(width: 370, height: 620)
-        .padding()
+        .frame(
+            width: SettingsWindowLayout.contentWidth,
+            height: SettingsWindowLayout.contentHeight(for: selectedTab)
+        )
+        .padding(SettingsWindowLayout.outerPadding)
+        .animation(.easeInOut(duration: SettingsWindowLayout.animationDuration), value: selectedTab)
+    }
+
+    private func resizeWindow(for tab: SettingsTab, animated: Bool) {
+        guard let window else { return }
+
+        let targetContentSize = SettingsWindowLayout.windowContentSize(for: tab)
+        var targetFrame = window.frameRect(
+            forContentRect: NSRect(origin: .zero, size: targetContentSize)
+        )
+        let currentFrame = window.frame
+
+        targetFrame.origin.x = currentFrame.origin.x
+        targetFrame.origin.y = currentFrame.maxY - targetFrame.height
+
+        if animated {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = SettingsWindowLayout.animationDuration
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                context.allowsImplicitAnimation = true
+                window.animator().setFrame(targetFrame, display: true)
+            }
+        } else {
+            window.setFrame(targetFrame, display: true)
+        }
+    }
+
+    private func updateDictionaryScrollIndicator(for tab: SettingsTab, animated: Bool) {
+        scrollIndicatorResetWorkItem?.cancel()
+        scrollIndicatorResetWorkItem = nil
+
+        guard tab == .dictionary, animated else {
+            hidesDictionaryScrollIndicator = false
+            return
+        }
+
+        hidesDictionaryScrollIndicator = true
+
+        let workItem = DispatchWorkItem {
+            hidesDictionaryScrollIndicator = false
+            scrollIndicatorResetWorkItem = nil
+        }
+        scrollIndicatorResetWorkItem = workItem
+
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + SettingsWindowLayout.animationDuration,
+            execute: workItem
+        )
+    }
+}
+
+private struct SettingsWindowAccessor: NSViewRepresentable {
+    @Binding var window: NSWindow?
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            window = view.window
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            window = nsView.window
+        }
     }
 }
 
