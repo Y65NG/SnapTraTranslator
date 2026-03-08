@@ -431,35 +431,39 @@ final class EdgeTTSService {
                     try await webSocketTask.send(.string(ssmlMessage))
                     
                     logger.info("⏳ Waiting for audio data...")
-                    
+
                     // Receive audio data with timeout
                     let startTime = Date()
                     var isComplete = false
                     var messageCount = 0
-                    
+
                     while !isComplete && Date().timeIntervalSince(startTime) < 30 { // 30s timeout
                         do {
                             let message = try await webSocketTask.receive()
                             messageCount += 1
-                            
+
                             switch message {
                             case .data(let data):
-                                // Check if it's a protocol message or audio
-                                if data.count < 200 {
-                                    // Might be a text protocol message
-                                    if let text = String(data: data, encoding: .utf8) {
-                                        logger.debug("📨 Received text message (#\(messageCount)): \(text.prefix(100))")
-                                        if text.contains("Path:turn.end") {
-                                            logger.info("✅ Received turn.end signal")
-                                            isComplete = true
-                                        }
-                                    }
-                                } else {
-                                    // Likely audio data
-                                    audioData.append(data)
-                                    logger.debug("🎵 Received audio chunk: \(data.count) bytes (total: \(audioData.count))")
+                                // Edge TTS binary frame structure:
+                                //   [2 bytes: header length N (big-endian uint16)]
+                                //   [N bytes: text header, e.g. "Path:audio\r\n..."]
+                                //   [remaining bytes: actual MP3 audio data]
+                                guard data.count >= 2 else { break }
+                                let headerLen = (Int(data[0]) << 8) | Int(data[1])
+                                let headerEnd = 2 + headerLen
+                                guard headerEnd <= data.count else { break }
+                                let headerData = data[2..<headerEnd]
+                                guard let headerText = String(data: headerData, encoding: .utf8) else { break }
+
+                                if headerText.contains("Path:audio") && headerEnd < data.count {
+                                    // Strip the binary header, append only the raw MP3 bytes
+                                    audioData.append(contentsOf: data[headerEnd...])
+                                    logger.debug("🎵 Audio chunk: \(data.count - headerEnd) bytes (total: \(audioData.count))")
+                                } else if headerText.contains("Path:turn.end") {
+                                    logger.info("✅ Received turn.end (binary)")
+                                    isComplete = true
                                 }
-                                
+
                             case .string(let text):
                                 logger.debug("📨 Received string message (#\(messageCount)): \(text.prefix(100))")
                                 if text.contains("Path:turn.end") {
@@ -467,7 +471,7 @@ final class EdgeTTSService {
                                     isComplete = true
                                 }
                             }
-                            
+
                             // Safety check
                             if audioData.count > 10_000_000 { // 10MB limit
                                 logger.warning("⚠️ Audio data exceeds 10MB, stopping")
@@ -584,124 +588,55 @@ final class BingTTSService {
     }
 }
 
-// MARK: - Google TTS Service (Fixed RPC Implementation)
+// MARK: - Google TTS Service
 
 final class GoogleTTSService {
     private let logger = Logger(subsystem: "com.yelog.SnapTra-Translator", category: "GoogleTTS")
-    
+
     func fetchAudio(
         text: String,
         language: String?
     ) async throws -> Data {
         logger.info("📡 Requesting Google TTS...")
-        
+
         // Google TTS has 100 character limit per request
         let trimmedText = String(text.prefix(100))
         let langCode = googleLanguageCode(for: language)
-        
-        // Build the RPC request exactly like gTTS does
-        let rpc = [[["jQ1olc", "[\"\(trimmedText)\",\"\(langCode)\",null,\"null\"]", NSNull(), "generic"]]]
-        
-        let rpcData = try JSONSerialization.data(withJSONObject: rpc)
-        guard let rpcString = String(data: rpcData, encoding: .utf8) else {
-            throw TTSError.invalidResponse
-        }
-        
-        // URL encode the RPC data
-        let encodedRpc = rpcString.addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_.~"))) ?? ""
-        let body = "f.req=\(encodedRpc)&at=\(getTimestamp())"
-        
-        guard let url = URL(string: "https://translate.google.com/_/TranslateWebserverUi/data/batchexecute") else {
+        let encodedText = trimmedText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+
+        // Use the translate_tts endpoint which directly returns MP3 audio.
+        // The previous RPC batchexecute approach embedded audio as base64 inside
+        // an escaped JSON string, and the regex failed to match the \" delimiters.
+        guard let url = URL(string: "https://translate.google.com/translate_tts?ie=UTF-8&q=\(encodedText)&tl=\(langCode)&client=tw-ob") else {
             throw TTSError.invalidURL
         }
-        
+
         var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/x-www-form-urlencoded;charset=utf-8", forHTTPHeaderField: "Content-Type")
-        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", forHTTPHeaderField: "User-Agent")
+        request.setValue(
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            forHTTPHeaderField: "User-Agent"
+        )
         request.setValue("https://translate.google.com/", forHTTPHeaderField: "Referer")
-        request.setValue("1", forHTTPHeaderField: "X-Client-Data")
-        request.httpBody = body.data(using: String.Encoding.utf8)
-        
-        logger.debug("📤 Sending POST request to Google TTS")
-        logger.debug("📦 Body: \(body.prefix(200))...")
-        
+
         let (data, response) = try await URLSession.shared.data(for: request)
-        
+
         guard let httpResponse = response as? HTTPURLResponse else {
             throw TTSError.invalidResponse
         }
-        
-        logger.info("📊 HTTP Status: \(httpResponse.statusCode)")
-        
-        guard httpResponse.statusCode == 200 else {
-            logger.error("❌ HTTP error: \(httpResponse.statusCode)")
-            if let responseStr = String(data: data, encoding: .utf8) {
-                logger.error("📄 Response: \(responseStr.prefix(500))")
-            }
+
+        logger.info("📊 HTTP Status: \(httpResponse.statusCode), size: \(data.count) bytes")
+
+        guard httpResponse.statusCode == 200, data.count > 100 else {
+            logger.error("❌ HTTP error or empty response: \(httpResponse.statusCode)")
             throw TTSError.invalidResponse
         }
-        
-        // Parse the response
-        guard let responseStr = String(data: data, encoding: .utf8) else {
-            logger.error("❌ Could not decode response")
-            throw TTSError.invalidResponse
-        }
-        
-        logger.debug("📄 Response preview: \(responseStr.prefix(200))")
-        
-        // Extract audio data
-        return try extractAudio(from: responseStr)
+
+        return data
     }
-    
-    private func extractAudio(from response: String) throws -> Data {
-        // The response format is: )]}'\n[[["wrb.fr","jQ1olc","[\"base64_audio\"]",...]]
-        // We need to find the jQ1olc entry and extract the base64 from it
-        
-        logger.debug("📄 Full response: \(response)")
-        
-        // Look for "jQ1olc" followed by a quoted JSON array containing base64
-        // Pattern: "jQ1olc","["base64_data"]"
-        let pattern = #""jQ1olc","\["([^"]+)"\]""#
-        
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: []),
-              let match = regex.firstMatch(in: response, options: [], range: NSRange(location: 0, length: response.utf16.count)),
-              let range = Range(match.range(at: 1), in: response) else {
-            logger.error("❌ Could not find audio data in response")
-            logger.error("📄 Full response: \(response)")
-            throw TTSError.audioDecodeError
-        }
-        
-        let base64Audio = String(response[range])
-        logger.info("🎵 Found base64 audio: \(base64Audio.prefix(50))...")
-        logger.info("🎵 Base64 length: \(base64Audio.count) characters")
-        
-        // Clean up the base64 string - remove any escaped characters
-        let cleanedBase64 = base64Audio
-            .replacingOccurrences(of: "\\n", with: "")
-            .replacingOccurrences(of: "\\r", with: "")
-            .replacingOccurrences(of: "\\t", with: "")
-            .replacingOccurrences(of: "\\", with: "")
-        
-        // Decode base64
-        guard let audioData = Data(base64Encoded: cleanedBase64) else {
-            logger.error("❌ Could not decode base64 audio (tried cleaned version too)")
-            // Try with padding
-            let paddedBase64 = cleanedBase64.padding(toLength: ((cleanedBase64.count + 3) / 4) * 4, withPad: "=", startingAt: 0)
-            guard let paddedData = Data(base64Encoded: paddedBase64) else {
-                throw TTSError.audioDecodeError
-            }
-            logger.info("✅ Successfully decoded with padding: \(paddedData.count) bytes")
-            return paddedData
-        }
-        
-        logger.info("✅ Successfully decoded \(audioData.count) bytes of audio")
-        return audioData
-    }
-    
+
     private func googleLanguageCode(for language: String?) -> String {
         guard let language = language else { return "en" }
-        
+
         let languageMap: [String: String] = [
             "en": "en",
             "zh": "zh-CN",
@@ -716,12 +651,7 @@ final class GoogleTTSService {
             "it": "it",
             "pt": "pt",
         ]
-        
+
         return languageMap[language] ?? "en"
-    }
-    
-    private func getTimestamp() -> String {
-        // Return current timestamp in milliseconds
-        return String(Int(Date().timeIntervalSince1970 * 1000))
     }
 }
