@@ -25,6 +25,7 @@ private func openAppStore() {
 
 struct AboutSettingsView: View {
     @EnvironmentObject var model: AppModel
+    var hidesScrollIndicator: Bool = false
 
     var body: some View {
         ScrollView {
@@ -95,7 +96,13 @@ struct AboutSettingsView: View {
                     .padding(.bottom, 4)
             }
             .padding()
+            .background(
+                ScrollViewScrollerConfigurator(
+                    hidesVerticalScroller: hidesScrollIndicator
+                )
+            )
         }
+        .scrollIndicators(hidesScrollIndicator ? .hidden : .automatic, axes: .vertical)
         .background(Color(nsColor: .windowBackgroundColor))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

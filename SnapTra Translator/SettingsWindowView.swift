@@ -21,13 +21,21 @@ extension Notification.Name {
 
 enum SettingsWindowLayout {
     static let contentWidth: CGFloat = 370
-    static let baseContentHeight: CGFloat = 620
-    static let dictionaryContentHeightIncrease: CGFloat = 200
+    static let generalContentHeight: CGFloat = 590
+    static let dictionaryContentHeight: CGFloat = 830
+    static let aboutContentHeight: CGFloat = 520
     static let outerPadding: CGFloat = 16
     static let animationDuration: TimeInterval = 0.24
 
     static func contentHeight(for tab: SettingsTab) -> CGFloat {
-        baseContentHeight + (tab == .dictionary ? dictionaryContentHeightIncrease : 0)
+        switch tab {
+        case .general:
+            return generalContentHeight
+        case .dictionary:
+            return dictionaryContentHeight
+        case .about:
+            return aboutContentHeight
+        }
     }
 
     static func windowContentSize(for tab: SettingsTab) -> CGSize {
@@ -42,7 +50,7 @@ struct SettingsWindowView: View {
     @EnvironmentObject var model: AppModel
     @State private var selectedTab: SettingsTab
     @State private var languageRefreshToken = UUID()
-    @State private var hidesDictionaryScrollIndicator = false
+    @State private var hidesTabScrollIndicator = false
     @State private var scrollIndicatorResetWorkItem: DispatchWorkItem?
     @State private var window: NSWindow?
     var initialTab: SettingsTab = .general
@@ -54,21 +62,25 @@ struct SettingsWindowView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            GeneralSettingsView()
+            GeneralSettingsView(
+                hidesScrollIndicator: hidesTabScrollIndicator
+            )
                 .tabItem {
                     Label(L("General"), systemImage: "gear")
                 }
                 .tag(SettingsTab.general)
 
             DictionarySettingsView(
-                hidesScrollIndicator: hidesDictionaryScrollIndicator
+                hidesScrollIndicator: hidesTabScrollIndicator
             )
                 .tabItem {
                     Label(L("Dictionary"), systemImage: "books.vertical")
                 }
                 .tag(SettingsTab.dictionary)
 
-            AboutSettingsView()
+            AboutSettingsView(
+                hidesScrollIndicator: hidesTabScrollIndicator
+            )
                 .tabItem {
                     Label(L("About"), systemImage: "info.circle")
                 }
@@ -89,11 +101,11 @@ struct SettingsWindowView: View {
             languageRefreshToken = UUID()
         }
         .onAppear {
-            updateDictionaryScrollIndicator(for: selectedTab, animated: false)
+            updateTabScrollIndicator(for: selectedTab, animated: false)
             resizeWindow(for: selectedTab, animated: false)
         }
         .onChange(of: selectedTab) { newValue in
-            updateDictionaryScrollIndicator(for: newValue, animated: true)
+            updateTabScrollIndicator(for: newValue, animated: true)
             resizeWindow(for: newValue, animated: true)
         }
         .onDisappear {
@@ -132,19 +144,19 @@ struct SettingsWindowView: View {
         }
     }
 
-    private func updateDictionaryScrollIndicator(for tab: SettingsTab, animated: Bool) {
+    private func updateTabScrollIndicator(for tab: SettingsTab, animated: Bool) {
         scrollIndicatorResetWorkItem?.cancel()
         scrollIndicatorResetWorkItem = nil
 
-        guard tab == .dictionary, animated else {
-            hidesDictionaryScrollIndicator = false
+        guard animated else {
+            hidesTabScrollIndicator = false
             return
         }
 
-        hidesDictionaryScrollIndicator = true
+        hidesTabScrollIndicator = true
 
         let workItem = DispatchWorkItem {
-            hidesDictionaryScrollIndicator = false
+            hidesTabScrollIndicator = false
             scrollIndicatorResetWorkItem = nil
         }
         scrollIndicatorResetWorkItem = workItem
@@ -180,6 +192,7 @@ struct GeneralSettingsView: View {
     @EnvironmentObject var model: AppModel
     @StateObject private var localizationManager = LocalizationManager.shared
     @State private var appeared = false
+    var hidesScrollIndicator: Bool = false
 
     private var allPermissionsGranted: Bool {
         model.permissions.status.screenRecording
@@ -366,7 +379,13 @@ struct GeneralSettingsView: View {
                 }
             }
             .padding()
+            .background(
+                ScrollViewScrollerConfigurator(
+                    hidesVerticalScroller: hidesScrollIndicator
+                )
+            )
         }
+        .scrollIndicators(hidesScrollIndicator ? .hidden : .automatic, axes: .vertical)
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
             Task { @MainActor in

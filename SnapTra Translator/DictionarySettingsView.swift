@@ -437,7 +437,7 @@ struct DictionarySettingsView: View {
     }
 }
 
-private struct ScrollViewScrollerConfigurator: NSViewRepresentable {
+struct ScrollViewScrollerConfigurator: NSViewRepresentable {
     let hidesVerticalScroller: Bool
 
     func makeNSView(context: Context) -> NSView {
@@ -461,7 +461,7 @@ private struct ScrollViewScrollerConfigurator: NSViewRepresentable {
     }
 }
 
-private extension NSView {
+extension NSView {
     func firstSuperview<T: NSView>(of type: T.Type) -> T? {
         var candidate = superview
         while let view = candidate {
