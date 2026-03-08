@@ -90,21 +90,12 @@ struct GeneralSettingsView: View {
 
     @available(macOS 15.0, *)
     private var requiredLanguagePairs: [LookupLanguagePair] {
-        switch model.settings.translationMode {
-        case .fixedDirection:
-            return [
-                .fixed(
-                    sourceIdentifier: model.settings.sourceLanguage,
-                    targetIdentifier: model.settings.targetLanguage
-                )
-            ]
-        case .autoMutualChineseEnglish:
-            let chineseIdentifier = model.settings.autoTranslateChineseIdentifier
-            return [
-                .automatic(direction: .englishToChinese, chineseIdentifier: chineseIdentifier),
-                .automatic(direction: .chineseToEnglish, chineseIdentifier: chineseIdentifier),
-            ]
-        }
+        [
+            .fixed(
+                sourceIdentifier: model.settings.sourceLanguage,
+                targetIdentifier: model.settings.targetLanguage
+            )
+        ]
     }
 
     @available(macOS 15.0, *)
@@ -112,14 +103,6 @@ struct GeneralSettingsView: View {
         guard let manager = model.languagePackManager else { return }
         for pair in requiredLanguagePairs where !pair.isSameLanguage {
             _ = await manager.checkLanguagePair(from: pair.sourceIdentifier, to: pair.targetIdentifier)
-        }
-    }
-
-    @available(macOS 15.0, *)
-    private func normalizeAutomaticTranslationSettings() {
-        model.settings.sourceLanguage = "en"
-        if !model.settings.targetLanguage.hasPrefix("zh") {
-            model.settings.targetLanguage = "zh-Hans"
         }
     }
 
@@ -165,40 +148,10 @@ struct GeneralSettingsView: View {
                         .opacity(0.5)
 
                     if #available(macOS 15.0, *) {
-                        TranslationModePickerRow(
-                            mode: $model.settings.translationMode,
-                            onModeChanged: {
-                                if model.settings.translationMode == .autoMutualChineseEnglish {
-                                    normalizeAutomaticTranslationSettings()
-                                }
-                                Task { @MainActor in
-                                    await refreshLanguageStatuses()
-                                }
-                            }
+                        GeneralTranslationLanguageRow(
+                            targetLanguage: $model.settings.targetLanguage,
+                            sourceLanguage: $model.settings.sourceLanguage
                         )
-
-                        Divider()
-                            .padding(.horizontal, 14)
-                            .opacity(0.5)
-
-                        if model.settings.translationMode == .fixedDirection {
-                            GeneralTranslationLanguageRow(
-                                targetLanguage: $model.settings.targetLanguage,
-                                sourceLanguage: $model.settings.sourceLanguage
-                            )
-                        } else {
-                            AutoTranslationChineseVariantRow(
-                                chineseLanguage: $model.settings.targetLanguage
-                            )
-
-                            Divider()
-                                .padding(.horizontal, 14)
-                                .opacity(0.5)
-
-                            DefaultLookupDirectionRow(
-                                direction: $model.settings.defaultLookupDirection
-                            )
-                        }
 
                         Divider()
                             .padding(.horizontal, 14)
@@ -309,9 +262,6 @@ struct GeneralSettingsView: View {
             Task { @MainActor in
                 await model.permissions.refreshStatusAsync()
                 if #available(macOS 15.0, *) {
-                    if model.settings.translationMode == .autoMutualChineseEnglish {
-                        normalizeAutomaticTranslationSettings()
-                    }
                     await refreshLanguageStatuses()
                 }
             }
@@ -390,180 +340,6 @@ struct ToggleRow: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-    }
-}
-
-@available(macOS 15.0, *)
-struct TranslationModePickerRow: View {
-    @Binding var mode: TranslationMode
-    let onModeChanged: () -> Void
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Text(L("Translation Mode"))
-                .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(.primary)
-
-            Spacer()
-
-            Picker("", selection: $mode) {
-                ForEach(TranslationMode.allCases) { mode in
-                    Text(mode.title).tag(mode)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .tint(.accentColor)
-            .onChange(of: mode) { _, _ in
-                onModeChanged()
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-    }
-}
-
-@available(macOS 15.0, *)
-struct DefaultLookupDirectionRow: View {
-    @Binding var direction: LookupDirection
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Text(L("Default Direction"))
-                .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(.primary)
-
-            Spacer()
-
-            Picker("", selection: $direction) {
-                ForEach(LookupDirection.allCases) { direction in
-                    Text(direction.title).tag(direction)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .tint(.accentColor)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-    }
-}
-
-@available(macOS 15.0, *)
-struct AutoTranslationChineseVariantRow: View {
-    @Binding var chineseLanguage: String
-    @EnvironmentObject var model: AppModel
-    @State private var showingUnavailableAlert = false
-    @State private var missingLanguagesMessage = ""
-
-    private let chineseVariants: [(id: String, nameKey: String)] = [
-        ("zh-Hans", "Chinese (Simplified)"),
-        ("zh-Hant", "Chinese (Traditional)"),
-    ]
-
-    private var currentPairs: [LookupLanguagePair] {
-        [
-            .automatic(direction: .englishToChinese, chineseIdentifier: chineseLanguage),
-            .automatic(direction: .chineseToEnglish, chineseIdentifier: chineseLanguage),
-        ]
-    }
-
-    private var currentStatuses: [LanguageAvailability.Status] {
-        currentPairs.compactMap { pair in
-            model.languagePackManager?.getStatus(from: pair.sourceIdentifier, to: pair.targetIdentifier)
-        }
-    }
-
-    private var allInstalled: Bool {
-        currentStatuses.count == currentPairs.count && currentStatuses.allSatisfy { $0 == .installed }
-    }
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Text(L("Chinese Variant"))
-                .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(.primary)
-
-            Spacer()
-
-            statusIcon
-
-            Picker("", selection: $chineseLanguage) {
-                ForEach(chineseVariants, id: \.id) { variant in
-                    Text(LocalizedStringKey(variant.nameKey)).tag(variant.id)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .tint(.accentColor)
-            .onChange(of: chineseLanguage) { _, _ in
-                Task { @MainActor in
-                    await refreshStatuses()
-                    if !allInstalled {
-                        showAvailabilityAlert()
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .alert(L("Language Pack Required"), isPresented: $showingUnavailableAlert) {
-            Button(L("Open Settings")) {
-                model.languagePackManager?.openTranslationSettings()
-            }
-            Button(L("Cancel"), role: .cancel) { }
-        } message: {
-            Text(missingLanguagesMessage)
-        }
-    }
-
-    @ViewBuilder
-    private var statusIcon: some View {
-        if model.languagePackManager?.isChecking == true {
-            ProgressView()
-                .controlSize(.small)
-                .scaleEffect(0.7)
-        } else if allInstalled {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.green)
-                .help(L("Language pack installed"))
-        } else {
-            Button {
-                Task { @MainActor in
-                    await refreshStatuses()
-                    if !allInstalled {
-                        showAvailabilityAlert()
-                    }
-                }
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.red)
-            }
-            .buttonStyle(.plain)
-            .help(L("Language pack required - click to download"))
-        }
-    }
-
-    private func refreshStatuses() async {
-        guard let manager = model.languagePackManager else { return }
-        for pair in currentPairs {
-            _ = await manager.checkLanguagePair(from: pair.sourceIdentifier, to: pair.targetIdentifier)
-        }
-    }
-
-    private func showAvailabilityAlert() {
-        let sourceName = languageName(for: chineseLanguage)
-        missingLanguagesMessage = L("The language packs for English ↔ \(sourceName) translation are not fully installed. Please download the required language packs in System Settings > General > Language & Region > Translation Languages.")
-        showingUnavailableAlert = true
-    }
-
-    private func languageName(for id: String) -> String {
-        guard let key = chineseVariants.first(where: { $0.id == id })?.nameKey else {
-            return id
-        }
-        return L(key)
     }
 }
 

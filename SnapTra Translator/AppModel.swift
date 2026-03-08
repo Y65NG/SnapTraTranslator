@@ -103,8 +103,7 @@ final class AppModel: ObservableObject {
     private var isHotkeyActive = false
     private var lastAvailabilityKey: String?
     private var cachedLanguageStatuses: [String: CachedLanguageAvailabilityStatus] = [:]
-    private var lastResolvedLookupDirection: LookupDirection?
-    
+
     private var globalMouseMonitor: Any?
     private var localMouseMonitor: Any?
     private var debounceWorkItem: DispatchWorkItem?
@@ -191,7 +190,6 @@ final class AppModel: ObservableObject {
         lookupTask?.cancel()
         lookupTask = nil
         activeLookupID = nil
-        lastResolvedLookupDirection = nil
         overlayState = .idle
         overlayWindowController.setInteractive(false)
         overlayWindowController.hide()
@@ -202,7 +200,6 @@ final class AppModel: ObservableObject {
         lookupTask?.cancel()
         lookupTask = nil
         activeLookupID = nil
-        lastResolvedLookupDirection = nil
         overlayState = .idle
         overlayWindowController.setInteractive(false)
         overlayWindowController.hide()
@@ -337,11 +334,7 @@ final class AppModel: ObservableObject {
             guard activeLookupID == lookupID else { return }
 
             updateOverlay(state: .loading(selected.text), anchor: mouseLocation)
-            let lookupConfiguration = resolveLookupConfiguration(for: selected.text)
-            let languagePair = lookupConfiguration.pair
-            if let resolvedDirection = lookupConfiguration.direction {
-                lastResolvedLookupDirection = resolvedDirection
-            }
+            let languagePair = resolveLookupLanguagePair()
 
             let sourceLanguage = languagePair.sourceLanguage
             let targetLanguage = languagePair.targetLanguage
@@ -507,13 +500,11 @@ final class AppModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        Publishers.CombineLatest4(
+        Publishers.CombineLatest(
             settings.$sourceLanguage,
-            settings.$targetLanguage,
-            settings.$translationMode,
-            settings.$defaultLookupDirection
+            settings.$targetLanguage
         )
-        .sink { [weak self] _, _, _, _ in
+        .sink { [weak self] _, _ in
             self?.handleTranslationSettingsChanged()
         }
         .store(in: &cancellables)
@@ -559,7 +550,6 @@ final class AppModel: ObservableObject {
         lookupTask?.cancel()
         lookupTask = nil
         activeLookupID = nil
-        lastResolvedLookupDirection = nil
         lastAvailabilityKey = nil
         cachedLanguageStatuses.removeAll()
         translationBridge.cancelAllPendingRequests()
@@ -607,46 +597,24 @@ final class AppModel: ObservableObject {
     }
 
     private var ocrRecognitionLanguages: [String] {
-        let identifiers: [String]
-        switch settings.translationMode {
-        case .fixedDirection:
-            identifiers = [settings.sourceLanguage, settings.targetLanguage]
-        case .autoMutualChineseEnglish:
-            identifiers = ["en", settings.autoTranslateChineseIdentifier]
-        }
-
         var seen = Set<String>()
-        return identifiers.filter { seen.insert($0).inserted }
+        return [settings.sourceLanguage, settings.targetLanguage].filter { seen.insert($0).inserted }
     }
 
-    private func resolveLookupConfiguration(for token: String) -> ResolvedLookupConfiguration {
-        LookupConfigurationResolver.resolve(
-            token: token,
-            translationMode: settings.translationMode,
-            sourceLanguageIdentifier: settings.sourceLanguage,
-            targetLanguageIdentifier: settings.targetLanguage,
-            chineseIdentifier: settings.autoTranslateChineseIdentifier,
-            defaultDirection: settings.defaultLookupDirection,
-            lastResolvedDirection: lastResolvedLookupDirection
+    private func resolveLookupLanguagePair() -> LookupLanguagePair {
+        .fixed(
+            sourceIdentifier: settings.sourceLanguage,
+            targetIdentifier: settings.targetLanguage
         )
     }
 
     private func requiredLanguagePairsForCurrentSettings() -> [LookupLanguagePair] {
-        switch settings.translationMode {
-        case .fixedDirection:
-            return [
-                .fixed(
-                    sourceIdentifier: settings.sourceLanguage,
-                    targetIdentifier: settings.targetLanguage
-                )
-            ]
-        case .autoMutualChineseEnglish:
-            let chineseIdentifier = settings.autoTranslateChineseIdentifier
-            return [
-                .automatic(direction: .englishToChinese, chineseIdentifier: chineseIdentifier),
-                .automatic(direction: .chineseToEnglish, chineseIdentifier: chineseIdentifier),
-            ]
-        }
+        [
+            .fixed(
+                sourceIdentifier: settings.sourceLanguage,
+                targetIdentifier: settings.targetLanguage
+            )
+        ]
     }
 
     private func languageAvailabilityStatus(

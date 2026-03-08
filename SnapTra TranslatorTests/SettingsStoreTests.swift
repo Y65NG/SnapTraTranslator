@@ -2,49 +2,21 @@ import XCTest
 @testable import SnapTra_Translator
 
 @MainActor
-final class LookupConfigurationResolverTests: XCTestCase {
-    func testFixedDirectionKeepsConfiguredLanguagePair() {
-        let result = LookupConfigurationResolver.resolve(
-            token: "hello",
-            translationMode: .fixedDirection,
-            sourceLanguageIdentifier: "en",
-            targetLanguageIdentifier: "ja",
-            chineseIdentifier: "zh-Hans",
-            defaultDirection: .englishToChinese,
-            lastResolvedDirection: .chineseToEnglish
-        )
+final class LookupLanguagePairTests: XCTestCase {
+    func testFixedLanguagePairPreservesIdentifiers() {
+        let pair = LookupLanguagePair.fixed(sourceIdentifier: "en", targetIdentifier: "ja")
 
-        XCTAssertNil(result.direction)
-        XCTAssertEqual(result.pair, .fixed(sourceIdentifier: "en", targetIdentifier: "ja"))
+        XCTAssertEqual(pair.sourceIdentifier, "en")
+        XCTAssertEqual(pair.targetIdentifier, "ja")
     }
 
-    func testAutoModeResolvesChineseTokenToChineseToEnglishPair() {
-        let result = LookupConfigurationResolver.resolve(
-            token: "你好",
-            translationMode: .autoMutualChineseEnglish,
-            sourceLanguageIdentifier: "en",
-            targetLanguageIdentifier: "ja",
-            chineseIdentifier: "zh-Hant",
-            defaultDirection: .englishToChinese,
-            lastResolvedDirection: nil
-        )
-
-        XCTAssertEqual(result.direction, .chineseToEnglish)
-        XCTAssertEqual(result.pair, .automatic(direction: .chineseToEnglish, chineseIdentifier: "zh-Hant"))
+    func testSameLanguageDetection() {
+        let pair = LookupLanguagePair.fixed(sourceIdentifier: "en", targetIdentifier: "en")
+        XCTAssertTrue(pair.isSameLanguage)
     }
 
-    func testAutoModeFallsBackToDefaultDirectionForAmbiguousToken() {
-        let result = LookupConfigurationResolver.resolve(
-            token: "2026",
-            translationMode: .autoMutualChineseEnglish,
-            sourceLanguageIdentifier: "en",
-            targetLanguageIdentifier: "ja",
-            chineseIdentifier: "zh-Hans",
-            defaultDirection: .chineseToEnglish,
-            lastResolvedDirection: nil
-        )
-
-        XCTAssertEqual(result.direction, .chineseToEnglish)
-        XCTAssertEqual(result.pair, .automatic(direction: .chineseToEnglish, chineseIdentifier: "zh-Hans"))
+    func testDifferentLanguageDetection() {
+        let pair = LookupLanguagePair.fixed(sourceIdentifier: "en", targetIdentifier: "zh-Hans")
+        XCTAssertFalse(pair.isSameLanguage)
     }
 }

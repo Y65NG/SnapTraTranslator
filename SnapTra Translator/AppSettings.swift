@@ -121,30 +121,12 @@ enum AppLanguage: String, CaseIterable, Identifiable {
     }
 }
 
-enum TranslationMode: String, CaseIterable, Identifiable {
-    case fixedDirection
-    case autoMutualChineseEnglish
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .fixedDirection:
-            return L("Fixed Translation Direction")
-        case .autoMutualChineseEnglish:
-            return L("Chinese-English Auto Mutual Translation")
-        }
-    }
-}
-
 enum AppSettingKey {
     static let playPronunciation = "playPronunciation"
     static let launchAtLogin = "launchAtLogin"
     static let singleKey = "singleKey"
     static let sourceLanguage = "sourceLanguage"
     static let targetLanguage = "targetLanguage"
-    static let translationMode = "translationMode"
-    static let defaultLookupDirection = "defaultLookupDirection"
     static let debugShowOcrRegion = "debugShowOcrRegion"
     static let continuousTranslation = "continuousTranslation"
     static let lastScreenRecordingStatus = "lastScreenRecordingStatus"

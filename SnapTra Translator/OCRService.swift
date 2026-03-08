@@ -95,7 +95,7 @@ final class OCRService {
     }
 
     nonisolated private static func refinedTokenRanges(in token: Substring) -> [Range<String.Index>] {
-        guard LookupDirectionResolver.classify(String(token)) == .english else {
+        guard OCRTokenClassifier.classify(String(token)) == .english else {
             return [token.startIndex..<token.endIndex]
         }
 
@@ -259,6 +259,6 @@ final class OCRService {
     }
 
     nonisolated private static func shouldKeepToken(_ token: Substring) -> Bool {
-        LookupDirectionResolver.classify(String(token)) != .unknown
+        OCRTokenClassifier.classify(String(token)) != .unknown
     }
 }

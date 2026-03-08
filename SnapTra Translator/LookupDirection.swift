@@ -1,39 +1,5 @@
 import Foundation
 
-enum LookupDirection: String, CaseIterable, Identifiable {
-    case englishToChinese
-    case chineseToEnglish
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .englishToChinese:
-            return L("English -> Chinese")
-        case .chineseToEnglish:
-            return L("Chinese -> English")
-        }
-    }
-
-    func sourceLanguageIdentifier(chineseIdentifier: String) -> String {
-        switch self {
-        case .englishToChinese:
-            return "en"
-        case .chineseToEnglish:
-            return chineseIdentifier
-        }
-    }
-
-    func targetLanguageIdentifier(chineseIdentifier: String) -> String {
-        switch self {
-        case .englishToChinese:
-            return chineseIdentifier
-        case .chineseToEnglish:
-            return "en"
-        }
-    }
-}
-
 struct LookupLanguagePair: Equatable {
     let sourceIdentifier: String
     let targetIdentifier: String
@@ -68,42 +34,17 @@ struct LookupLanguagePair: Equatable {
             targetIdentifier: targetIdentifier
         )
     }
-
-    static func automatic(
-        direction: LookupDirection,
-        chineseIdentifier: String
-    ) -> LookupLanguagePair {
-        LookupLanguagePair(
-            sourceIdentifier: direction.sourceLanguageIdentifier(chineseIdentifier: chineseIdentifier),
-            targetIdentifier: direction.targetLanguageIdentifier(chineseIdentifier: chineseIdentifier)
-        )
-    }
 }
 
-struct ResolvedLookupConfiguration: Equatable {
-    let pair: LookupLanguagePair
-    let direction: LookupDirection?
+enum OCRTokenScript: Equatable {
+    case chinese
+    case english
+    case mixed
+    case unknown
 }
 
-enum LookupDirectionResolver {
+enum OCRTokenClassifier {
     private static let englishLetterSet = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-    static func resolveDirection(
-        for token: String,
-        defaultDirection: LookupDirection,
-        lastResolvedDirection: LookupDirection?
-    ) -> LookupDirection {
-        let script = classify(token)
-
-        switch script {
-        case .english:
-            return .englishToChinese
-        case .chinese:
-            return .chineseToEnglish
-        case .mixed, .unknown:
-            return lastResolvedDirection ?? defaultDirection
-        }
-    }
 
     static func classify(_ token: String) -> OCRTokenScript {
         var hanCount = 0
@@ -131,44 +72,4 @@ enum LookupDirectionResolver {
 
         return .unknown
     }
-}
-
-enum LookupConfigurationResolver {
-    static func resolve(
-        token: String,
-        translationMode: TranslationMode,
-        sourceLanguageIdentifier: String,
-        targetLanguageIdentifier: String,
-        chineseIdentifier: String,
-        defaultDirection: LookupDirection,
-        lastResolvedDirection: LookupDirection?
-    ) -> ResolvedLookupConfiguration {
-        switch translationMode {
-        case .fixedDirection:
-            return ResolvedLookupConfiguration(
-                pair: .fixed(
-                    sourceIdentifier: sourceLanguageIdentifier,
-                    targetIdentifier: targetLanguageIdentifier
-                ),
-                direction: nil
-            )
-        case .autoMutualChineseEnglish:
-            let direction = LookupDirectionResolver.resolveDirection(
-                for: token,
-                defaultDirection: defaultDirection,
-                lastResolvedDirection: lastResolvedDirection
-            )
-            return ResolvedLookupConfiguration(
-                pair: .automatic(direction: direction, chineseIdentifier: chineseIdentifier),
-                direction: direction
-            )
-        }
-    }
-}
-
-enum OCRTokenScript: Equatable {
-    case chinese
-    case english
-    case mixed
-    case unknown
 }
