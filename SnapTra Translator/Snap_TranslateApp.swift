@@ -46,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     // Store menu items that need state updates
     private weak var pronunciationMenuItem: NSMenuItem?
     private weak var continuousTranslationMenuItem: NSMenuItem?
+    private weak var providerInfoMenuItem: NSMenuItem?
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         guard !isRunningTests else { return }
@@ -153,49 +154,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private func createStatusBarMenu() -> NSMenu {
         let menu = NSMenu()
         menu.delegate = self
-
-        // Title item (disabled, gray)
-        let titleItem = NSMenuItem(
-            title: "SnapTra Translator",
-            action: nil,
-            keyEquivalent: ""
-        )
-        titleItem.isEnabled = false
+        
+        // Header section - SnapTra title (styled as header, not disabled item)
+        let titleItem = createHeaderMenuItem(title: "SnapTra")
         menu.addItem(titleItem)
+        
         menu.addItem(.separator())
-
-        // Quick actions - store references for dynamic updates
+        
+        // Status section - toggle items with checkmarks
         // Pronunciation toggle
         let pronunciationItem = NSMenuItem(
-            title: "",
+            title: L("Pronunciation"),
             action: #selector(togglePronunciation),
             keyEquivalent: ""
         )
         pronunciationItem.target = self
         menu.addItem(pronunciationItem)
         self.pronunciationMenuItem = pronunciationItem
-
+        
         // Continuous translation toggle
         let continuousItem = NSMenuItem(
-            title: "",
+            title: L("Continuous Translation"),
             action: #selector(toggleContinuousTranslation),
             keyEquivalent: ""
         )
         continuousItem.target = self
         menu.addItem(continuousItem)
         self.continuousTranslationMenuItem = continuousItem
-
-        // Hotkey display (disabled, just shows current hotkey)
-        let hotkeyItem = NSMenuItem(
-            title: String(format: L("Shortcut: %@"), model.settings.hotkeyDisplayText),
+        
+        // Provider info (read-only, shows current TTS provider)
+        let providerItem = NSMenuItem(
+            title: "",
             action: nil,
             keyEquivalent: ""
         )
-        hotkeyItem.isEnabled = false
-        menu.addItem(hotkeyItem)
-
+        providerItem.isEnabled = false
+        providerItem.indentationLevel = 1
+        menu.addItem(providerItem)
+        self.providerInfoMenuItem = providerItem
+        
         menu.addItem(.separator())
-
+        
+        // Actions section
         // Settings
         let settingsItem = NSMenuItem(
             title: L("Settings..."),
@@ -204,9 +204,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         )
         settingsItem.target = self
         menu.addItem(settingsItem)
-
-        menu.addItem(.separator())
-
+        
         // About
         let aboutItem = NSMenuItem(
             title: L("About SnapTra"),
@@ -214,9 +212,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             keyEquivalent: ""
         )
         aboutItem.target = self
-        aboutItem.indentationLevel = 0
         menu.addItem(aboutItem)
-
+        
         // Quit
         let quitItem = NSMenuItem(
             title: L("Quit"),
@@ -224,31 +221,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             keyEquivalent: "q"
         )
         quitItem.target = self
-        quitItem.indentationLevel = 0
         menu.addItem(quitItem)
-
-        // Update dynamic menu item titles
+        
+        // Update dynamic menu item states
         updateDynamicMenuItems()
-
+        
         return menu
+    }
+    
+    /// Creates a header-style menu item that looks like a title rather than a disabled item
+    private func createHeaderMenuItem(title: String) -> NSMenuItem {
+        let item = NSMenuItem()
+        item.isEnabled = false
+        
+        // Use attributed string for better visual hierarchy
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
+            .foregroundColor: NSColor.labelColor
+        ]
+        item.attributedTitle = NSAttributedString(string: title, attributes: attributes)
+        
+        return item
     }
 
     private func updateDynamicMenuItems() {
-        // Update pronunciation menu item with provider info
+        // Update pronunciation menu item state (checkmark)
+        pronunciationMenuItem?.state = model.settings.playPronunciation ? .on : .off
+        
+        // Update continuous translation menu item state (checkmark)
+        continuousTranslationMenuItem?.state = model.settings.continuousTranslation ? .on : .off
+        
+        // Update provider info item
         let provider = model.settings.ttsProvider
         let providerName = provider == .apple
             ? L("System")
             : provider.displayName
-        let pronunciationTitle = model.settings.playPronunciation
-            ? String(format: L("Pronunciation: On (%@)"), providerName)
-            : L("Pronunciation: Off")
-        pronunciationMenuItem?.title = pronunciationTitle
-
-        // Update continuous translation menu item
-        let continuousTitle = model.settings.continuousTranslation
-            ? L("Continuous Translation: On")
-            : L("Continuous Translation: Off")
-        continuousTranslationMenuItem?.title = continuousTitle
+        let providerTitle = String(format: L("Provider: %@"), providerName)
+        
+        // Style the provider info with secondary color
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 12),
+            .foregroundColor: NSColor.secondaryLabelColor
+        ]
+        providerInfoMenuItem?.attributedTitle = NSAttributedString(
+            string: providerTitle,
+            attributes: attributes
+        )
     }
 
     private func updateMenuLanguage() {
