@@ -480,21 +480,21 @@ struct GeneralTranslationLanguageRow: View {
     @State private var showingUnavailableAlert = false
     @State private var missingLanguagesMessage = ""
 
-    private let commonLanguages: [(id: String, nameKey: String)] = [
-        ("zh-Hans", "Chinese (Simplified)"),
-        ("zh-Hant", "Chinese (Traditional)"),
+    private let commonLanguages: [(id: String, name: String)] = [
+        ("zh-Hans", "简体中文"),
+        ("zh-Hant", "繁體中文"),
         ("en", "English"),
-        ("ja", "Japanese"),
-        ("ko", "Korean"),
-        ("fr", "French"),
-        ("de", "German"),
-        ("es", "Spanish"),
-        ("it", "Italian"),
-        ("pt", "Portuguese"),
-        ("ru", "Russian"),
-        ("ar", "Arabic"),
-        ("th", "Thai"),
-        ("vi", "Vietnamese")
+        ("ja", "日本語"),
+        ("ko", "한국어"),
+        ("fr", "Français"),
+        ("de", "Deutsch"),
+        ("es", "Español"),
+        ("it", "Italiano"),
+        ("pt", "Português"),
+        ("ru", "Русский"),
+        ("ar", "العربية"),
+        ("th", "ไทย"),
+        ("vi", "Tiếng Việt")
     ]
 
     var body: some View {
@@ -509,7 +509,7 @@ struct GeneralTranslationLanguageRow: View {
 
             Picker("", selection: $targetLanguage) {
                 ForEach(commonLanguages, id: \.id) { lang in
-                    Text(LocalizedStringKey(lang.nameKey)).tag(lang.id)
+                    Text(verbatim: lang.name).tag(lang.id)
                 }
             }
             .labelsHidden()
@@ -596,10 +596,7 @@ struct GeneralTranslationLanguageRow: View {
     }
 
     private func languageName(for id: String) -> String {
-        guard let key = commonLanguages.first(where: { $0.id == id })?.nameKey else {
-            return id
-        }
-        return L(key)
+        commonLanguages.first(where: { $0.id == id })?.name ?? id
     }
 
     private func checkLanguageAvailability(_ language: String) {
