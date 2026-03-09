@@ -8,19 +8,34 @@ import UserNotifications
 struct OverlayContent: Equatable {
     var word: String
     var phonetic: String?
-    var translation: String
-    var dictionaryEntries: [DictionaryEntry]  // Multiple dictionary results
+    var primaryTranslationState: OverlayPrimaryTranslationState
+    var dictionarySections: [OverlayDictionarySection]
 
     init(
         word: String,
         phonetic: String?,
-        translation: String,
-        dictionaryEntries: [DictionaryEntry] = []
+        primaryTranslationState: OverlayPrimaryTranslationState,
+        dictionarySections: [OverlayDictionarySection] = []
     ) {
         self.word = word
         self.phonetic = phonetic
-        self.translation = translation
-        self.dictionaryEntries = dictionaryEntries
+        self.primaryTranslationState = primaryTranslationState
+        self.dictionarySections = dictionarySections
+    }
+
+    var translation: String {
+        if case .ready(let text, _) = primaryTranslationState {
+            return text
+        }
+        return word
+    }
+
+    var dictionaryEntries: [DictionaryEntry] {
+        dictionarySections.compactMap(\.entry)
+    }
+
+    var hasReadyDictionaryEntries: Bool {
+        !dictionaryEntries.isEmpty
     }
 
     /// Backward compatibility: returns definitions from first dictionary entry
@@ -32,6 +47,34 @@ struct OverlayContent: Equatable {
     var dictionarySource: DictionaryEntry.Source? {
         dictionaryEntries.first?.source
     }
+}
+
+enum OverlayPrimaryTranslationState: Equatable {
+    case loading
+    case ready(String, isFallback: Bool)
+    case empty
+    case failed(String)
+}
+
+struct OverlayDictionarySection: Equatable, Identifiable {
+    let sourceType: DictionarySource.SourceType
+    var state: OverlayDictionarySectionState
+
+    var id: String {
+        sourceType.rawValue
+    }
+
+    var entry: DictionaryEntry? {
+        guard case .ready(let entry) = state else { return nil }
+        return entry
+    }
+}
+
+enum OverlayDictionarySectionState: Equatable {
+    case loading
+    case ready(DictionaryEntry)
+    case empty
+    case failed(String)
 }
 
 enum OverlayState: Equatable {
@@ -72,6 +115,13 @@ private enum CachedLanguageAvailabilityStatus: String {
             return .unsupported
         }
     }
+}
+
+private struct DictionarySectionResult {
+    let sourceType: DictionarySource.SourceType
+    let state: OverlayDictionarySectionState
+    let phonetic: String?
+    let fallbackTranslation: String?
 }
 
 @MainActor
@@ -289,7 +339,6 @@ final class AppModel: ObservableObject {
             return
         }
 
-        var fallbackContent: OverlayContent?
         let mouseLocation = NSEvent.mouseLocation
         guard activeLookupID == lookupID else { return }
 
@@ -335,11 +384,10 @@ final class AppModel: ObservableObject {
             }
             guard activeLookupID == lookupID else { return }
 
-            updateOverlay(state: .loading(selected.text), anchor: mouseLocation)
             let languagePair = resolveLookupLanguagePair()
-
             let sourceLanguage = languagePair.sourceLanguage
             let targetLanguage = languagePair.targetLanguage
+
             if settings.playPronunciation {
                 let languageCode = sourceLanguage.languageCode?.identifier
                 speechService.speak(
@@ -351,134 +399,189 @@ final class AppModel: ObservableObject {
             }
             guard !Task.isCancelled, activeLookupID == lookupID else { return }
 
-            let dictEntries = await dictionaryService.lookupAll(
-                selected.text,
-                sources: settings.dictionarySources,
-                sourceLanguage: languagePair.sourceIdentifier,
-                targetLanguage: languagePair.targetIdentifier,
-                preferEnglish: languagePair.targetIsEnglish
-            )
-            let phonetic = dictEntries.first?.phonetic
-            fallbackContent = makeFallbackOverlayContent(
+            let initialContent = makeInitialOverlayContent(
                 word: selected.text,
-                phonetic: phonetic,
-                entries: dictEntries
+                sources: settings.dictionarySources,
+                primaryTranslationState: languagePair.isSameLanguage
+                    ? .ready(selected.text, isFallback: false)
+                    : .loading
             )
+            updateOverlay(state: .result(initialContent), anchor: mouseLocation)
 
-            if languagePair.isSameLanguage {
-                // Same language: process definitions from all dictionaries
-                var allProcessedEntries: [DictionaryEntry] = []
-                let isEnglish = sourceLanguage.minimalIdentifier == "en"
-
-                for entry in dictEntries {
-                    var processedDefinitions = entry.definitions
-
-                    if isEnglish && !entry.definitions.isEmpty {
-                        processedDefinitions = entry.definitions.compactMap { def in
-                            let trimmedMeaning = def.meaning.trimmingCharacters(in: .whitespacesAndNewlines)
-                            let hasEnglishContent = trimmedMeaning.range(of: "[a-zA-Z]{3,}", options: .regularExpression) != nil
-                            guard hasEnglishContent else { return nil }
-                            return DictionaryEntry.Definition(
-                                partOfSpeech: def.partOfSpeech,
-                                field: def.field,
-                                meaning: def.meaning,
-                                translation: trimmedMeaning,
-                                examples: def.examples
-                            )
-                        }
-                    }
-
-                    if !processedDefinitions.isEmpty {
-                        allProcessedEntries.append(DictionaryEntry(
-                            word: entry.word,
-                            phonetic: entry.phonetic,
-                            definitions: processedDefinitions,
-                            source: entry.source,
-                            synonyms: entry.synonyms
-                        ))
+            let enabledSources = settings.dictionarySources.filter(\.isEnabled)
+            await withTaskGroup(of: Void.self) { group in
+                if !languagePair.isSameLanguage {
+                    group.addTask { [weak self, translationBridge] in
+                        guard let self else { return }
+                        let translationState = await self.loadPrimaryTranslationState(
+                            word: selected.text,
+                            languagePair: languagePair,
+                            sourceLanguage: sourceLanguage,
+                            targetLanguage: targetLanguage,
+                            translationBridge: translationBridge
+                        )
+                        await self.applyPrimaryTranslationState(
+                            translationState,
+                            lookupID: lookupID,
+                            anchor: mouseLocation
+                        )
                     }
                 }
 
-                let content = OverlayContent(
-                    word: selected.text,
-                    phonetic: phonetic,
-                    translation: selected.text,
-                    dictionaryEntries: allProcessedEntries
-                )
-                updateOverlay(state: .result(content), anchor: mouseLocation)
-                return
-            }
-
-            if #available(macOS 15.0, *) {
-                let status = await languageAvailabilityStatus(for: languagePair)
-                guard status == .installed else {
-                    if let fallbackContent {
-                        updateOverlay(state: .result(fallbackContent), anchor: mouseLocation)
-                    } else {
-                        updateOverlay(state: .error(message(for: status)), anchor: mouseLocation)
+                for source in enabledSources {
+                    group.addTask { [weak self, dictionaryService, translationBridge] in
+                        guard let self else { return }
+                        let result = await Self.lookupDictionarySection(
+                            word: selected.text,
+                            source: source,
+                            dictionaryService: dictionaryService,
+                            sourceIdentifier: languagePair.sourceIdentifier,
+                            targetIdentifier: languagePair.targetIdentifier,
+                            preferEnglish: languagePair.targetIsEnglish,
+                            sourceLanguage: sourceLanguage,
+                            targetLanguage: targetLanguage,
+                            translationBridge: translationBridge
+                        )
+                        await self.applyDictionarySectionResult(
+                            result,
+                            lookupID: lookupID,
+                            anchor: mouseLocation
+                        )
                     }
-                    return
-                }
-
-                let translated = try await translationBridge.translate(text: selected.text, source: sourceLanguage, target: targetLanguage)
-                guard !Task.isCancelled, activeLookupID == lookupID else { return }
-
-                // Translate definitions from all dictionaries
-                var translatedEntries: [DictionaryEntry] = []
-                for entry in dictEntries {
-                    if entry.isPretranslated {
-                        translatedEntries.append(entry)
-                        continue
-                    }
-
-                    let translatedDefinitions = await translateDefinitionsInParallel(
-                        definitions: entry.definitions,
-                        sourceLanguage: sourceLanguage,
-                        targetLanguage: targetLanguage
-                    )
-                    if !translatedDefinitions.isEmpty {
-                        translatedEntries.append(DictionaryEntry(
-                            word: entry.word,
-                            phonetic: entry.phonetic,
-                            definitions: translatedDefinitions,
-                            source: entry.source,
-                            synonyms: entry.synonyms,
-                            isPretranslated: entry.isPretranslated
-                        ))
-                    }
-                }
-
-                let content = OverlayContent(
-                    word: selected.text,
-                    phonetic: phonetic,
-                    translation: translated.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        ? (fallbackContent?.translation ?? selected.text)
-                        : translated,
-                    dictionaryEntries: translatedEntries
-                )
-                updateOverlay(state: .result(content), anchor: mouseLocation)
-            } else {
-                if let fallbackContent {
-                    updateOverlay(state: .result(fallbackContent), anchor: mouseLocation)
-                } else {
-                    updateOverlay(state: .error(L("Translation requires macOS 15")), anchor: mouseLocation)
                 }
             }
         } catch is CancellationError {
             // Task was cancelled, do nothing
-        } catch TranslationError.timeout {
-            if let fallbackContent {
-                updateOverlay(state: .result(fallbackContent), anchor: mouseLocation)
-            } else {
-                updateOverlay(state: .error(L("Translation timeout. Please try again.")), anchor: mouseLocation)
-            }
         } catch {
-            if let fallbackContent {
-                updateOverlay(state: .result(fallbackContent), anchor: mouseLocation)
-            } else {
-                updateOverlay(state: .error(L("Translation failed: \(error.localizedDescription)")), anchor: mouseLocation)
+            updateOverlay(state: .error(L("Translation failed: \(error.localizedDescription)")), anchor: mouseLocation)
+        }
+    }
+
+    private func makeInitialOverlayContent(
+        word: String,
+        sources: [DictionarySource],
+        primaryTranslationState: OverlayPrimaryTranslationState
+    ) -> OverlayContent {
+        OverlayContent(
+            word: word,
+            phonetic: nil,
+            primaryTranslationState: primaryTranslationState,
+            dictionarySections: sources
+                .filter(\.isEnabled)
+                .map { OverlayDictionarySection(sourceType: $0.type, state: .loading) }
+        )
+    }
+
+    private func loadPrimaryTranslationState(
+        word: String,
+        languagePair: LookupLanguagePair,
+        sourceLanguage: Locale.Language,
+        targetLanguage: Locale.Language,
+        translationBridge: TranslationBridge
+    ) async -> OverlayPrimaryTranslationState {
+        if #available(macOS 15.0, *) {
+            let status = await languageAvailabilityStatus(for: languagePair)
+            guard status == .installed else {
+                return .failed(message(for: status))
+            }
+
+            do {
+                let translated = try await translationBridge.translate(
+                    text: word,
+                    source: sourceLanguage,
+                    target: targetLanguage
+                ).trimmingCharacters(in: .whitespacesAndNewlines)
+
+                return translated.isEmpty ? .empty : .ready(translated, isFallback: false)
+            } catch TranslationError.timeout {
+                return .failed(L("Translation timeout. Please try again."))
+            } catch {
+                return .failed(L("Translation failed: \(error.localizedDescription)"))
+            }
+        } else {
+            return .failed(L("Translation requires macOS 15"))
+        }
+    }
+
+    private func applyPrimaryTranslationState(
+        _ state: OverlayPrimaryTranslationState,
+        lookupID: UUID,
+        anchor: CGPoint
+    ) {
+        updateOverlayContent(for: lookupID, anchor: anchor) { content in
+            switch state {
+            case .ready:
+                content.primaryTranslationState = state
+            case .loading:
+                content.primaryTranslationState = .loading
+            case .empty:
+                if case .ready(_, let isFallback) = content.primaryTranslationState, isFallback {
+                    break
+                }
+                content.primaryTranslationState = .empty
+            case .failed:
+                if case .ready(_, let isFallback) = content.primaryTranslationState, isFallback {
+                    break
+                }
+                content.primaryTranslationState = state
             }
         }
+    }
+
+    private func applyDictionarySectionResult(
+        _ result: DictionarySectionResult,
+        lookupID: UUID,
+        anchor: CGPoint
+    ) {
+        updateOverlayContent(for: lookupID, anchor: anchor) { content in
+            guard let index = content.dictionarySections.firstIndex(where: { $0.sourceType == result.sourceType }) else {
+                return
+            }
+
+            content.dictionarySections[index].state = result.state
+
+            if let phonetic = result.phonetic?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !phonetic.isEmpty,
+               (content.phonetic?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) {
+                content.phonetic = phonetic
+            }
+
+            guard case .ready(_, let isFallback) = content.primaryTranslationState else {
+                if case .loading = content.primaryTranslationState {
+                    updateFallbackPrimaryTranslation(for: &content)
+                } else if case .empty = content.primaryTranslationState {
+                    updateFallbackPrimaryTranslation(for: &content)
+                } else if case .failed = content.primaryTranslationState {
+                    updateFallbackPrimaryTranslation(for: &content)
+                }
+                return
+            }
+
+            if isFallback {
+                updateFallbackPrimaryTranslation(for: &content)
+            }
+        }
+    }
+
+    private func updateOverlayContent(
+        for lookupID: UUID,
+        anchor: CGPoint,
+        mutate: (inout OverlayContent) -> Void
+    ) {
+        guard activeLookupID == lookupID,
+              case .result(var content) = overlayState else {
+            return
+        }
+
+        mutate(&content)
+        updateOverlay(state: .result(content), anchor: anchor)
+    }
+
+    private func updateFallbackPrimaryTranslation(for content: inout OverlayContent) {
+        guard let fallback = content.dictionarySections.lazy.compactMap(\.entry).compactMap(\.primaryTranslation).first else {
+            return
+        }
+        content.primaryTranslationState = .ready(fallback, isFallback: true)
     }
 
     func updateOverlay(state: OverlayState, anchor: CGPoint? = nil) {
@@ -693,10 +796,113 @@ final class AppModel: ObservableObject {
         return CGPoint(x: x, y: y)
     }
 
-    private func translateDefinitionsInParallel(
+    private static func lookupDictionarySection(
+        word: String,
+        source: DictionarySource,
+        dictionaryService: DictionaryService,
+        sourceIdentifier: String,
+        targetIdentifier: String,
+        preferEnglish: Bool,
+        sourceLanguage: Locale.Language,
+        targetLanguage: Locale.Language,
+        translationBridge: TranslationBridge
+    ) async -> DictionarySectionResult {
+        guard let entry = await dictionaryService.lookupSingle(
+            word,
+            source: source,
+            sourceLanguage: sourceIdentifier,
+            targetLanguage: targetIdentifier,
+            preferEnglish: preferEnglish
+        ) else {
+            return DictionarySectionResult(
+                sourceType: source.type,
+                state: .empty,
+                phonetic: nil,
+                fallbackTranslation: nil
+            )
+        }
+
+        let processedEntry: DictionaryEntry?
+        if sourceLanguage.minimalIdentifier == targetLanguage.minimalIdentifier {
+            processedEntry = processSameLanguageEntry(entry, isEnglish: sourceLanguage.minimalIdentifier == "en")
+        } else if entry.isPretranslated {
+            processedEntry = entry
+        } else {
+            let translatedDefinitions = await translateDefinitionsInParallel(
+                definitions: entry.definitions,
+                sourceLanguage: sourceLanguage,
+                targetLanguage: targetLanguage,
+                translationBridge: translationBridge
+            )
+
+            if translatedDefinitions.isEmpty {
+                processedEntry = nil
+            } else {
+                processedEntry = DictionaryEntry(
+                    word: entry.word,
+                    phonetic: entry.phonetic,
+                    definitions: translatedDefinitions,
+                    source: entry.source,
+                    synonyms: entry.synonyms,
+                    isPretranslated: entry.isPretranslated
+                )
+            }
+        }
+
+        guard let processedEntry else {
+            return DictionarySectionResult(
+                sourceType: source.type,
+                state: .empty,
+                phonetic: entry.phonetic,
+                fallbackTranslation: nil
+            )
+        }
+
+        return DictionarySectionResult(
+            sourceType: source.type,
+            state: .ready(processedEntry),
+            phonetic: processedEntry.phonetic,
+            fallbackTranslation: processedEntry.primaryTranslation
+        )
+    }
+
+    private static func processSameLanguageEntry(
+        _ entry: DictionaryEntry,
+        isEnglish: Bool
+    ) -> DictionaryEntry? {
+        var processedDefinitions = entry.definitions
+
+        if isEnglish && !entry.definitions.isEmpty {
+            processedDefinitions = entry.definitions.compactMap { def in
+                let trimmedMeaning = def.meaning.trimmingCharacters(in: .whitespacesAndNewlines)
+                let hasEnglishContent = trimmedMeaning.range(of: "[a-zA-Z]{3,}", options: .regularExpression) != nil
+                guard hasEnglishContent else { return nil }
+                return DictionaryEntry.Definition(
+                    partOfSpeech: def.partOfSpeech,
+                    field: def.field,
+                    meaning: def.meaning,
+                    translation: trimmedMeaning,
+                    examples: def.examples
+                )
+            }
+        }
+
+        guard !processedDefinitions.isEmpty else { return nil }
+        return DictionaryEntry(
+            word: entry.word,
+            phonetic: entry.phonetic,
+            definitions: processedDefinitions,
+            source: entry.source,
+            synonyms: entry.synonyms,
+            isPretranslated: entry.isPretranslated
+        )
+    }
+
+    private static func translateDefinitionsInParallel(
         definitions: [DictionaryEntry.Definition],
         sourceLanguage: Locale.Language,
-        targetLanguage: Locale.Language
+        targetLanguage: Locale.Language,
+        translationBridge: TranslationBridge
     ) async -> [DictionaryEntry.Definition] {
         let targetIsChinese = targetLanguage.minimalIdentifier == "zh"
         let targetIsEnglish = targetLanguage.minimalIdentifier == "en"
@@ -737,8 +943,12 @@ final class AppModel: ObservableObject {
                         target: targetLanguage
                     ) {
                         translatedText = meaningTranslation
-                    } else {
+                    } else if hasDictionaryTranslation {
+                        translatedText = trimmedTranslation
+                    } else if targetIsEnglish {
                         translatedText = def.meaning
+                    } else {
+                        return (index, nil)
                     }
 
                     return (index, DictionaryEntry.Definition(
@@ -759,30 +969,6 @@ final class AppModel: ObservableObject {
             }
             return results.sorted { $0.0 < $1.0 }.map { $0.1 }
         }
-    }
-
-    private func makeFallbackOverlayContent(
-        word: String,
-        phonetic: String?,
-        entries: [DictionaryEntry]
-    ) -> OverlayContent? {
-        let displayableEntries = entries.filter { entry in
-            entry.definitions.contains { definition in
-                let translation = definition.translation?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                return !translation.isEmpty
-            }
-        }
-
-        guard let translation = displayableEntries.lazy.compactMap(\.primaryTranslation).first else {
-            return nil
-        }
-
-        return OverlayContent(
-            word: word,
-            phonetic: phonetic,
-            translation: translation,
-            dictionaryEntries: displayableEntries
-        )
     }
 
     private func selectWord(from words: [RecognizedWord], normalizedPoint: CGPoint) -> RecognizedWord? {

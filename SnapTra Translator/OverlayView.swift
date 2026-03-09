@@ -116,32 +116,48 @@ struct OverlayView: View {
             primaryTranslationSection(content: content)
 
             // Dictionary sections (one per dictionary source)
-            if !content.dictionaryEntries.isEmpty {
-                dictionarySectionsView(entries: content.dictionaryEntries)
+            if !content.dictionarySections.isEmpty {
+                dictionarySectionsView(sections: content.dictionarySections)
             }
         }
     }
 
     @ViewBuilder
-    private func dictionarySectionsView(entries: [DictionaryEntry]) -> some View {
-        ForEach(Array(entries.enumerated()), id: \.offset) { index, entry in
+    private func dictionarySectionsView(sections: [OverlayDictionarySection]) -> some View {
+        ForEach(Array(sections.enumerated()), id: \.element.id) { index, section in
             VStack(alignment: .leading, spacing: 0) {
                 Divider()
                     .padding(.horizontal, 18)
                     .opacity(0.6)
 
                 // Dictionary source header
-                dictionarySourceSectionHeader(source: entry.source, isFirst: index == 0)
+                dictionarySourceSectionHeader(sourceType: section.sourceType, isFirst: index == 0)
 
-                // Definitions for this dictionary
-                definitionsSection(definitions: entry.definitions, showDividers: false)
+                dictionarySectionBody(section)
             }
         }
     }
 
     @ViewBuilder
-    private func dictionarySourceSectionHeader(source: DictionaryEntry.Source, isFirst: Bool) -> some View {
-        let config = dictionarySourceConfig(for: source)
+    private func dictionarySectionBody(_ section: OverlayDictionarySection) -> some View {
+        switch section.state {
+        case .loading:
+            dictionaryStatusRow(
+                text: L("Translating"),
+                showsSpinner: true
+            )
+        case .ready(let entry):
+            definitionsSection(definitions: entry.definitions, showDividers: false)
+        case .empty:
+            dictionaryStatusRow(text: L("No result"))
+        case .failed(let message):
+            dictionaryStatusRow(text: message.isEmpty ? L("Unavailable") : message)
+        }
+    }
+
+    @ViewBuilder
+    private func dictionarySourceSectionHeader(sourceType: DictionarySource.SourceType, isFirst: Bool) -> some View {
+        let config = dictionarySourceConfig(for: sourceType)
 
         HStack(spacing: 6) {
             Image(systemName: config.icon)
@@ -155,9 +171,9 @@ struct OverlayView: View {
         .padding(.bottom, 6)
     }
 
-    private func dictionarySourceConfig(for source: DictionaryEntry.Source) -> (title: String, icon: String, color: Color) {
-        switch source {
-        case .advancedDictionary:
+    private func dictionarySourceConfig(for sourceType: DictionarySource.SourceType) -> (title: String, icon: String, color: Color) {
+        switch sourceType {
+        case .ecdict:
             return (
                 L("Advanced Dictionary"),
                 "book.closed",
@@ -169,37 +185,56 @@ struct OverlayView: View {
                 "book.pages",
                 Color(red: 0.4, green: 0.6, blue: 0.9)
             )
-        case .systemDictionary:
+        case .system:
             return (
                 L("System Dictionary"),
                 "book.closed",
                 .secondary
             )
-        case .googleTranslate:
+        case .google:
             return (
                 L("Google Translate"),
                 "globe",
                 Color(red: 0.10, green: 0.45, blue: 0.95)
             )
-        case .bingDictionary:
+        case .bing:
             return (
                 L("Bing Dictionary"),
                 "text.book.closed",
                 Color(red: 0.00, green: 0.65, blue: 0.78)
             )
-        case .youdaoDictionary:
+        case .youdao:
             return (
                 L("Youdao Dictionary"),
                 "book.closed.fill",
                 Color(red: 0.90, green: 0.30, blue: 0.22)
             )
-        case .deepLTranslate:
+        case .deepl:
             return (
                 L("DeepL Translate"),
                 "diamond.fill",
                 Color(red: 0.05, green: 0.24, blue: 0.63)
             )
         }
+    }
+
+    @ViewBuilder
+    private func dictionaryStatusRow(text: String, showsSpinner: Bool = false) -> some View {
+        HStack(spacing: 8) {
+            if showsSpinner {
+                ProgressView()
+                    .controlSize(.small)
+                    .scaleEffect(0.8)
+            }
+
+            Text(text)
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+
+            Spacer()
+        }
+        .padding(.horizontal, 18)
+        .padding(.bottom, 12)
     }
 
     @ViewBuilder
@@ -261,50 +296,81 @@ struct OverlayView: View {
     @ViewBuilder
     private func primaryTranslationSection(content: OverlayContent) -> some View {
         let targetIsEnglish = model.settings.targetLanguage.hasPrefix("en")
-        let shouldHideTranslation = targetIsEnglish && !content.definitions.isEmpty
+        let shouldHideReadyTranslation = targetIsEnglish && !content.definitions.isEmpty
 
-        if !shouldHideTranslation {
+        switch content.primaryTranslationState {
+        case .loading:
             HStack(spacing: 8) {
-                if !content.definitions.isEmpty {
-                    // Clean gradient translation text (no background container)
-                    Text(content.translation)
-                        .font(.system(size: 17, weight: .medium, design: .rounded))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: colorScheme == .dark
-                                    ? [
-                                        Color(red: 0.2, green: 0.6, blue: 1.0),
-                                        Color(red: 0.5, green: 0.5, blue: 0.95),
-                                    ]
-                                    : [
-                                        Color(red: 0.1, green: 0.4, blue: 0.85),
-                                        Color(red: 0.35, green: 0.3, blue: 0.8),
-                                    ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .tracking(0.3)
-
-                    if !model.settings.continuousTranslation {
-                        CopyButton(text: content.translation)
-                    }
-                } else {
-                    // Large primary translation (when no definitions)
-                    Text(content.translation)
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                        .foregroundStyle(.primary)
-                        .tracking(0.2)
-
-                    if !model.settings.continuousTranslation {
-                        CopyButton(text: content.translation)
-                    }
-                }
-
+                ProgressView()
+                    .controlSize(.small)
+                    .scaleEffect(0.85)
+                Text(L("Translating"))
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                LoadingDotsView()
                 Spacer()
             }
             .padding(.horizontal, 18)
-            .padding(.bottom, content.definitions.isEmpty ? 16 : 8)
+            .padding(.bottom, 16)
+
+        case .ready(let translation, _):
+            if !shouldHideReadyTranslation {
+                HStack(spacing: 8) {
+                    if !content.definitions.isEmpty {
+                        Text(translation)
+                            .font(.system(size: 17, weight: .medium, design: .rounded))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: colorScheme == .dark
+                                        ? [
+                                            Color(red: 0.2, green: 0.6, blue: 1.0),
+                                            Color(red: 0.5, green: 0.5, blue: 0.95),
+                                        ]
+                                        : [
+                                            Color(red: 0.1, green: 0.4, blue: 0.85),
+                                            Color(red: 0.35, green: 0.3, blue: 0.8),
+                                        ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .tracking(0.3)
+
+                        if !model.settings.continuousTranslation {
+                            CopyButton(text: translation)
+                        }
+                    } else {
+                        Text(translation)
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .foregroundStyle(.primary)
+                            .tracking(0.2)
+
+                        if !model.settings.continuousTranslation {
+                            CopyButton(text: translation)
+                        }
+                    }
+
+                    Spacer()
+                }
+                .padding(.horizontal, 18)
+                .padding(.bottom, content.definitions.isEmpty ? 16 : 8)
+            }
+
+        case .empty:
+            EmptyView()
+
+        case .failed(let message):
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.circle")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text(message)
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal, 18)
+            .padding(.bottom, 16)
         }
     }
 

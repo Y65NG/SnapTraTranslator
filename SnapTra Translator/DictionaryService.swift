@@ -42,6 +42,33 @@ final class DictionaryService {
     ///   - sources: Array of dictionary sources to query
     ///   - preferEnglish: Whether to prefer English definitions
     /// - Returns: Array of matching dictionary entries from all enabled sources
+    func lookupSingle(
+        _ word: String,
+        source: DictionarySource,
+        sourceLanguage: String,
+        targetLanguage: String,
+        preferEnglish: Bool = false
+    ) async -> DictionaryEntry? {
+        guard source.isEnabled, let normalized = normalizeWord(word) else { return nil }
+
+        if source.type.isOnline {
+            return await onlineService.lookup(
+                normalized,
+                provider: source.type,
+                sourceLanguage: sourceLanguage,
+                targetLanguage: targetLanguage
+            )
+        }
+
+        return Self.lookupFromLocalSource(
+            source,
+            word: normalized,
+            preferEnglish: preferEnglish,
+            offlineService: offlineService,
+            wordNetService: wordNetService
+        )
+    }
+
     func lookupAll(
         _ word: String,
         sources: [DictionarySource],
@@ -53,21 +80,12 @@ final class DictionaryService {
 
         var entries: [DictionaryEntry] = []
         for source in sources where source.isEnabled {
-            if source.type.isOnline {
-                if let entry = await onlineService.lookup(
-                    normalized,
-                    provider: source.type,
-                    sourceLanguage: sourceLanguage,
-                    targetLanguage: targetLanguage
-                ) {
-                    entries.append(entry)
-                }
-            } else if let entry = Self.lookupFromLocalSource(
-                source,
-                word: normalized,
-                preferEnglish: preferEnglish,
-                offlineService: offlineService,
-                wordNetService: wordNetService
+            if let entry = await lookupSingle(
+                normalized,
+                source: source,
+                sourceLanguage: sourceLanguage,
+                targetLanguage: targetLanguage,
+                preferEnglish: preferEnglish
             ) {
                 entries.append(entry)
             }
