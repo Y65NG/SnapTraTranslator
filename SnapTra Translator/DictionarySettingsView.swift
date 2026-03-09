@@ -203,7 +203,7 @@ struct DictionarySettingsView: View {
             .padding(.horizontal)
             .padding(.top)
 
-            VStack(spacing: 8) {
+            List {
                 ForEach($sources) { $source in
                     IntegratedDictionaryRow(
                         source: $source,
@@ -218,9 +218,14 @@ struct DictionarySettingsView: View {
                         onCancel: { performCancel(for: source.type) },
                         onRetry: { performRetry(for: source.type) }
                     )
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
                 }
                 .onMove(perform: moveSource)
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
             .padding(.horizontal)
         }
     }
