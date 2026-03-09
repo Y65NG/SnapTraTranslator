@@ -91,9 +91,7 @@ struct SettingsWindowView: View {
         )
         .onReceive(NotificationCenter.default.publisher(for: .switchSettingsTab)) { notification in
             if let tab = notification.object as? SettingsTab {
-                withAnimation(.easeInOut(duration: SettingsWindowLayout.animationDuration)) {
-                    selectedTab = tab
-                }
+                selectedTab = tab
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .languageChanged)) { _ in
@@ -117,7 +115,6 @@ struct SettingsWindowView: View {
             height: SettingsWindowLayout.contentHeight(for: selectedTab)
         )
         .padding(SettingsWindowLayout.outerPadding)
-        .animation(.easeInOut(duration: SettingsWindowLayout.animationDuration), value: selectedTab)
     }
 
     private func resizeWindow(for tab: SettingsTab, animated: Bool) {

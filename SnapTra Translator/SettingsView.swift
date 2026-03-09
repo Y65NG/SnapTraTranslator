@@ -2,7 +2,6 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject var model: AppModel
-    @State private var appeared = false
 
     var body: some View {
         ScrollView {
@@ -10,8 +9,7 @@ struct SettingsView: View {
                 // MARK: - General
                 SettingsSectionCard(
                     title: L("General"),
-                    icon: "gear",
-                    delay: 0
+                    icon: "gear"
                 ) {
                     VStack(spacing: 14) {
                         // App Language Selector
@@ -35,8 +33,7 @@ struct SettingsView: View {
                 // MARK: - Shortcuts
                 SettingsSectionCard(
                     title: L("Shortcuts"),
-                    icon: "keyboard",
-                    delay: 0.05
+                    icon: "keyboard"
                 ) {
                     SettingsRowView {
                         HotkeyKeycapSelector(selectedKey: $model.settings.singleKey)
@@ -47,8 +44,7 @@ struct SettingsView: View {
                 // MARK: - Translation
                 SettingsSectionCard(
                     title: L("Translation"),
-                    icon: "character.book.closed",
-                    delay: 0.1
+                    icon: "character.book.closed"
                 ) {
                     VStack(spacing: 14) {
                         SettingsToggleRow(
@@ -81,8 +77,7 @@ struct SettingsView: View {
                 // MARK: - Dictionary
                 SettingsSectionCard(
                     title: L("Dictionary"),
-                    icon: "books.vertical",
-                    delay: 0.15
+                    icon: "books.vertical"
                 ) {
                     ECDICTDictionaryRow(manager: model.dictionaryDownload)
                 }
@@ -90,8 +85,7 @@ struct SettingsView: View {
                 // MARK: - Permissions
                 SettingsSectionCard(
                     title: L("Permissions"),
-                    icon: "lock.shield",
-                    delay: 0.2
+                    icon: "lock.shield"
                 ) {
                     VStack(spacing: 14) {
                         PermissionRow(
@@ -135,9 +129,6 @@ struct SettingsView: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
             Task { await model.permissions.refreshStatusAsync() }
-            withAnimation(.easeOut(duration: 0.4)) {
-                appeared = true
-            }
         }
     }
 }
@@ -145,9 +136,7 @@ struct SettingsView: View {
 struct SettingsSectionCard<Content: View>: View {
     let title: String
     let icon: String
-    let delay: Double
     @ViewBuilder let content: Content
-    @State private var appeared = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -176,13 +165,6 @@ struct SettingsSectionCard<Content: View>: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .strokeBorder(.quaternary, lineWidth: 0.5)
         )
-        .opacity(appeared ? 1 : 0)
-        .offset(y: appeared ? 0 : 8)
-        .onAppear {
-            withAnimation(.easeOut(duration: 0.35).delay(delay)) {
-                appeared = true
-            }
-        }
     }
 }
 
