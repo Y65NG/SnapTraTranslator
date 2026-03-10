@@ -45,12 +45,6 @@ final class SettingsStore: ObservableObject {
 
     private let defaults: UserDefaults
     private static let dictionarySourcesKey = "dictionarySources"
-    private static let appendedOnlineSources: [DictionarySource.SourceType] = [
-        .google,
-        .bing,
-        .youdao,
-        .deepl,
-    ]
 
     init(defaults: UserDefaults = .standard, loginItemStatus: Bool? = nil) {
         self.defaults = defaults
@@ -151,22 +145,21 @@ final class SettingsStore: ObservableObject {
         [
             makeDictionarySource(type: .ecdict, isEnabled: ecdictInstalled),
             makeDictionarySource(type: .system, isEnabled: true),
-        ] + appendedOnlineSources.map { makeDictionarySource(type: $0, isEnabled: false) }
+        ]
     }
 
     static func migrateDictionarySources(_ sources: [DictionarySource]) -> [DictionarySource] {
-        var migrated: [DictionarySource] = sources.map {
+        let hiddenTypes: Set<DictionarySource.SourceType> = [.google, .bing, .youdao, .deepl, .wordNet]
+        
+        let filtered = sources.filter { !hiddenTypes.contains($0.type) }
+        
+        let migrated: [DictionarySource] = filtered.map {
             DictionarySource(
                 id: $0.id,
                 name: $0.type.displayName,
                 type: $0.type,
                 isEnabled: $0.isEnabled
             )
-        }
-
-        let existingTypes = Set(migrated.map(\.type))
-        for type in appendedOnlineSources where !existingTypes.contains(type) {
-            migrated.append(makeDictionarySource(type: type, isEnabled: false))
         }
 
         return migrated
