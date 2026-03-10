@@ -146,7 +146,6 @@ final class AppModel: ObservableObject {
     private let dictionaryService = DictionaryService()
     private let speechService = SpeechService()
     let dictionaryDownload: DictionaryDownloadManager
-    let wordNetDownload: WordNetDownloadManager
     private var cancellables = Set<AnyCancellable>()
     private var lookupTask: Task<Void, Never>?
     private var activeLookupID: UUID?
@@ -172,7 +171,6 @@ final class AppModel: ObservableObject {
         self.permissions = resolvedPermissions
         self.translationBridge = TranslationBridge()
         self.dictionaryDownload = DictionaryDownloadManager(offlineService: dictionaryService.offlineService)
-        self.wordNetDownload = WordNetDownloadManager(wordNetService: dictionaryService.wordNetService)
 
         // Forward SettingsStore changes to AppModel so SwiftUI redraws
         resolvedSettings.objectWillChange
@@ -183,13 +181,6 @@ final class AppModel: ObservableObject {
 
         // Forward DictionaryDownloadManager changes to AppModel so SwiftUI redraws
         self.dictionaryDownload.objectWillChange
-            .sink { [weak self] _ in
-                self?.objectWillChange.send()
-            }
-            .store(in: &cancellables)
-
-        // Forward WordNetDownloadManager changes to AppModel so SwiftUI redraws
-        self.wordNetDownload.objectWillChange
             .sink { [weak self] _ in
                 self?.objectWillChange.send()
             }

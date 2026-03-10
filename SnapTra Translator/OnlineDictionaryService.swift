@@ -34,7 +34,7 @@ final class OnlineDictionaryService {
                 return try await lookupYoudao(trimmedWord, sourceLanguage: sourceLanguage, targetLanguage: targetLanguage)
             case .deepl:
                 return try await lookupDeepL(trimmedWord, sourceLanguage: sourceLanguage, targetLanguage: targetLanguage)
-            case .system, .ecdict, .wordNet:
+            case .system, .ecdict:
                 return nil
             }
         } catch {

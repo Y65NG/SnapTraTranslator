@@ -4,7 +4,6 @@ import Foundation
 struct DictionaryEntry: Equatable {
     enum Source: Equatable {
         case advancedDictionary  // ECDICT
-        case wordNet             // WordNet English-English
         case systemDictionary    // macOS system dictionary
         case googleTranslate
         case bingDictionary

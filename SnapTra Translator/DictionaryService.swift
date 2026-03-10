@@ -5,9 +5,6 @@ final class DictionaryService {
     /// Offline ECDICT database. Exposed so AppModel can pass it to DictionaryDownloadManager.
     let offlineService = OfflineDictionaryService()
 
-    /// WordNet English-English dictionary service.
-    let wordNetService = WordNetService()
-
     /// Web dictionary providers used for lightweight word translations.
     private let onlineService = OnlineDictionaryService()
 
@@ -26,8 +23,7 @@ final class DictionaryService {
                 source,
                 word: normalized,
                 preferEnglish: preferEnglish,
-                offlineService: offlineService,
-                wordNetService: wordNetService
+                offlineService: offlineService
             ) {
                 return entry
             }
@@ -64,8 +60,7 @@ final class DictionaryService {
             source,
             word: normalized,
             preferEnglish: preferEnglish,
-            offlineService: offlineService,
-            wordNetService: wordNetService
+            offlineService: offlineService
         )
     }
 
@@ -112,8 +107,7 @@ final class DictionaryService {
         _ source: DictionarySource,
         word: String,
         preferEnglish: Bool,
-        offlineService: OfflineDictionaryService,
-        wordNetService: WordNetService
+        offlineService: OfflineDictionaryService
     ) -> DictionaryEntry? {
         switch source.type {
         case .ecdict:
@@ -126,9 +120,6 @@ final class DictionaryService {
                 source: .advancedDictionary,
                 synonyms: entry.synonyms
             )
-        case .wordNet:
-            guard let wnEntry = wordNetService.lookup(word) else { return nil }
-            return wnEntry.toDictionaryEntry()
         case .system:
             return lookupFromSystemDictionary(word: word, preferEnglish: preferEnglish)
         case .google, .bing, .youdao, .deepl:

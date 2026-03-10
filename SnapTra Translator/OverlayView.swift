@@ -179,12 +179,6 @@ struct OverlayView: View {
                 "book.closed",
                 .secondary
             )
-        case .wordNet:
-            return (
-                L("WordNet"),
-                "book.pages",
-                Color(red: 0.4, green: 0.6, blue: 0.9)
-            )
         case .system:
             return (
                 L("System Dictionary"),

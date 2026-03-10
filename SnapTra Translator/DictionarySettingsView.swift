@@ -144,7 +144,6 @@ struct DictionarySource: Identifiable, Codable, Equatable {
     enum SourceType: String, Codable {
         case system    // macOS system dictionary
         case ecdict    // ECDICT offline dictionary
-        case wordNet   // WordNet English-English dictionary
         case google
         case bing
         case youdao
@@ -161,8 +160,6 @@ extension DictionarySource.SourceType {
         switch self {
         case .ecdict:
             return L("Advanced Dictionary")
-        case .wordNet:
-            return L("WordNet")
         case .system:
             return L("System Dictionary")
         case .google:
@@ -180,8 +177,6 @@ extension DictionarySource.SourceType {
         switch self {
         case .ecdict:
             return L("Advanced offline dictionary")
-        case .wordNet:
-            return L("English definitions and synonyms")
         case .system:
             return L("macOS built-in dictionary")
         case .google:
@@ -196,14 +191,14 @@ extension DictionarySource.SourceType {
     }
 
     var needsDownloadManagement: Bool {
-        self == .ecdict || self == .wordNet
+        self == .ecdict
     }
 
     var isOnline: Bool {
         switch self {
         case .google, .bing, .youdao, .deepl:
             return true
-        case .system, .ecdict, .wordNet:
+        case .system, .ecdict:
             return false
         }
     }
@@ -404,8 +399,6 @@ struct DictionarySettingsView: View {
         switch type {
         case .ecdict:
             return convertState(model.dictionaryDownload.state)
-        case .wordNet:
-            return convertState(model.wordNetDownload.state)
         case .system:
             return nil
         case .google, .bing, .youdao, .deepl:
@@ -423,22 +416,10 @@ struct DictionarySettingsView: View {
         }
     }
 
-    private func convertState(_ state: WordNetDownloadManager.State) -> DownloadState {
-        switch state {
-        case .notInstalled: return .notInstalled
-        case .downloading(let progress): return .downloading(progress: progress)
-        case .installing: return .installing
-        case .installed(let sizeMB): return .installed(sizeMB: sizeMB)
-        case .error(let message): return .error(message)
-        }
-    }
-
     private func performDownload(for type: DictionarySource.SourceType) {
         switch type {
         case .ecdict:
             model.dictionaryDownload.startDownload()
-        case .wordNet:
-            model.wordNetDownload.startDownload()
         case .system:
             break
         case .google, .bing, .youdao, .deepl:
@@ -450,8 +431,6 @@ struct DictionarySettingsView: View {
         switch type {
         case .ecdict:
             model.dictionaryDownload.cancelDownload()
-        case .wordNet:
-            model.wordNetDownload.cancelDownload()
         case .system:
             break
         case .google, .bing, .youdao, .deepl:
@@ -463,8 +442,6 @@ struct DictionarySettingsView: View {
         switch type {
         case .ecdict:
             model.dictionaryDownload.delete()
-        case .wordNet:
-            model.wordNetDownload.delete()
         case .system:
             break
         case .google, .bing, .youdao, .deepl:
@@ -476,8 +453,6 @@ struct DictionarySettingsView: View {
         switch type {
         case .ecdict:
             model.dictionaryDownload.retry()
-        case .wordNet:
-            model.wordNetDownload.retry()
         case .system:
             break
         case .google, .bing, .youdao, .deepl:
@@ -641,10 +616,6 @@ struct IntegratedDictionaryRow: View {
             Image(systemName: "book.fill")
                 .font(.system(size: 16))
                 .foregroundStyle(.blue)
-        case .wordNet:
-            Image(systemName: "character.book.closed")
-                .font(.system(size: 16))
-                .foregroundStyle(.purple)
         case .system:
             Image(systemName: "text.book.closed")
                 .font(.system(size: 16))
