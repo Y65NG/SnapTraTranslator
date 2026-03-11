@@ -240,12 +240,29 @@ struct OverlayView: View {
     @ViewBuilder
     private func headerSection(content: OverlayContent) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Word title with copy button
+            // Word title with phonetic, copy button and close button
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(content.word)
                     .font(.system(size: 22, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
                     .tracking(0.3)
+
+                // Phonetic tag placed right after the word
+                if let phonetic = content.phonetic, !phonetic.isEmpty {
+                    Text(phonetic)
+                        .font(.system(size: 11, weight: .regular, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .strokeBorder(.secondary.opacity(0.25), lineWidth: 0.5)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                        .fill(.secondary.opacity(0.06))
+                                )
+                        )
+                }
 
                 // 非持续模式下显示复制按钮
                 if !model.settings.continuousTranslation {
@@ -270,22 +287,6 @@ struct OverlayView: View {
                     }
                     .buttonStyle(.plain)
                 }
-            }
-
-            if let phonetic = content.phonetic, !phonetic.isEmpty {
-                Text(phonetic)
-                    .font(.system(size: 11, weight: .regular, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .strokeBorder(.secondary.opacity(0.25), lineWidth: 0.5)
-                            .background(
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .fill(.secondary.opacity(0.06))
-                            )
-                    )
             }
         }
         .padding(.horizontal, 18)
