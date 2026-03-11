@@ -1378,7 +1378,12 @@ final class AppModel: ObservableObject {
                 self?.overlayLayoutRefreshWorkItem = nil
                 guard let self else { return }
                 guard self.overlayWindowController.isVisible else { return }
-                self.overlayWindowController.refreshLayoutIfNeeded(at: self.overlayAnchor)
+                // 若句子矩形已确定，保持对齐到句子位置；否则用鼠标锚点刷新
+                if let sentenceRect = self.activeParagraphRect {
+                    self.overlayWindowController.alignToSentenceRect(sentenceRect, animated: false)
+                } else {
+                    self.overlayWindowController.refreshLayoutIfNeeded(at: self.overlayAnchor)
+                }
             }
         }
 
