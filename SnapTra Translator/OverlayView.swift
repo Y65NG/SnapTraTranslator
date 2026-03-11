@@ -200,9 +200,9 @@ struct OverlayView: View {
                     ) {
                         paragraphTextContent(
                             text: originalText,
-                            font: .systemFont(ofSize: 12, weight: .medium),
+                            font: .systemFont(ofSize: 13, weight: .medium),
                             textColor: .labelColor,
-                            preferredLineHeight: 18
+                            preferredLineHeight: 20
                         )
                     }
 
@@ -231,9 +231,9 @@ struct OverlayView: View {
                         ) {
                             paragraphTextContent(
                                 text: translatedText,
-                                font: .systemFont(ofSize: 12, weight: .semibold),
+                                font: .systemFont(ofSize: 13, weight: .semibold),
                                 textColor: .labelColor,
-                                preferredLineHeight: 18
+                                preferredLineHeight: 20
                             )
                         }
 
@@ -291,9 +291,9 @@ struct OverlayView: View {
             ) {
                 paragraphTextContent(
                     text: translatedText,
-                    font: .systemFont(ofSize: 12, weight: .medium),
+                    font: .systemFont(ofSize: 13, weight: .medium),
                     textColor: .labelColor,
-                    preferredLineHeight: 18
+                    preferredLineHeight: 20
                 )
             }
 
