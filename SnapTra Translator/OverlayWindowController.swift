@@ -87,33 +87,111 @@ final class DebugOverlayWindowController: NSWindowController {
 // MARK: - Paragraph Highlight View
 
 private struct ParagraphHighlightView: View {
+    private let accentColor = Color(red: 0.18, green: 0.88, blue: 0.42)
+    private let lineWidth: CGFloat = 2.5
+    /// Half-width of the gradient beam in points
+    private let beamHalfWidth: CGFloat = 25
+
+    @State private var appeared = false
+    /// Beam center x position in the Canvas coordinate space (0 = left edge)
+    @State private var beamCenterX: CGFloat = -25
+
     var body: some View {
         GeometryReader { geometry in
-            let lineWidth: CGFloat = 3
-            Path { path in
-                let rect = CGRect(origin: .zero, size: geometry.size)
-                let cornerLength = min(min(rect.width, rect.height) * 0.22, 22)
+            let size = geometry.size
+            let cornerLength = min(min(size.width, size.height) * 0.22, 22)
 
-                path.move(to: CGPoint(x: rect.minX, y: rect.maxY - cornerLength))
-                path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-                path.addLine(to: CGPoint(x: rect.minX + cornerLength, y: rect.maxY))
+            ZStack {
+                // Layer 1 — ambient fill
+                Rectangle()
+                    .fill(accentColor.opacity(0.04))
 
-                path.move(to: CGPoint(x: rect.maxX - cornerLength, y: rect.maxY))
-                path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-                path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - cornerLength))
+                // Layer 2 — scan beam drawn via Canvas so coordinates are unambiguous
+                Canvas { ctx, canvasSize in
+                    let centerX = beamCenterX
+                    let left  = max(0, centerX - beamHalfWidth)
+                    let right = min(canvasSize.width, centerX + beamHalfWidth)
+                    guard right > left else { return }
 
-                path.move(to: CGPoint(x: rect.minX, y: rect.minY + cornerLength))
-                path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
-                path.addLine(to: CGPoint(x: rect.minX + cornerLength, y: rect.minY))
+                    let beamRect = CGRect(x: left, y: 0, width: right - left, height: canvasSize.height)
 
-                path.move(to: CGPoint(x: rect.maxX - cornerLength, y: rect.minY))
-                path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-                path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + cornerLength))
+                    // Map gradient stops to the clipped rect
+                    let fullLeft  = centerX - beamHalfWidth
+                    let fullRight = centerX + beamHalfWidth
+                    let fullWidth = fullRight - fullLeft
+
+                    // Build a gradient that covers the visible slice of the beam inside beamRect
+                    let gradient = Gradient(stops: [
+                        .init(color: accentColor.opacity(0),    location: 0),
+                        .init(color: accentColor.opacity(0.55), location: 0.42),
+                        .init(color: accentColor.opacity(0.85), location: 0.5),
+                        .init(color: accentColor.opacity(0.55), location: 0.58),
+                        .init(color: accentColor.opacity(0),    location: 1),
+                    ])
+                    // Extend gradient start/end beyond beamRect so only the
+                    // correct slice of the gradient is visible inside beamRect
+                    let gradStart = CGPoint(x: fullLeft,  y: canvasSize.height / 2)
+                    let gradEnd   = CGPoint(x: fullRight, y: canvasSize.height / 2)
+
+                    ctx.fill(
+                        Path(beamRect),
+                        with: .linearGradient(
+                            gradient,
+                            startPoint: gradStart,
+                            endPoint: gradEnd
+                        )
+                    )
+                }
+
+                // Layer 3 — corner brackets
+                cornerBrackets(size: size, cornerLength: cornerLength)
+                    .stroke(
+                        accentColor,
+                        style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round)
+                    )
             }
-            .stroke(
-                Color(red: 0.18, green: 0.88, blue: 0.42),
-                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round)
-            )
+            .opacity(appeared ? 1 : 0)
+            .scaleEffect(appeared ? 1 : 0.97)
+            .onAppear {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    appeared = true
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    beamCenterX = -beamHalfWidth
+                    withAnimation(
+                        .easeInOut(duration: 1.4)
+                        .repeatForever(autoreverses: true)
+                    ) {
+                        beamCenterX = size.width + beamHalfWidth
+                    }
+                }
+            }
+        }
+    }
+
+    private func cornerBrackets(size: CGSize, cornerLength: CGFloat) -> Path {
+        Path { path in
+            let rect = CGRect(origin: .zero, size: size)
+
+            // bottom-left
+            path.move(to: CGPoint(x: rect.minX, y: rect.maxY - cornerLength))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.minX + cornerLength, y: rect.maxY))
+
+            // bottom-right
+            path.move(to: CGPoint(x: rect.maxX - cornerLength, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - cornerLength))
+
+            // top-left
+            path.move(to: CGPoint(x: rect.minX, y: rect.minY + cornerLength))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.minX + cornerLength, y: rect.minY))
+
+            // top-right
+            path.move(to: CGPoint(x: rect.maxX - cornerLength, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + cornerLength))
         }
     }
 }
