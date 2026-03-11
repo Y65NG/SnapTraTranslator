@@ -427,9 +427,13 @@ final class OCRService {
         let heightRatio = maxHeight / minHeight
         guard heightRatio <= 1.4 else { return false }
 
-        // Vertical gap must be within normal line-spacing range (reduced from 1.6× to 1.2×)
+        // Vertical gap must be within normal line-spacing range.
+        // Within a paragraph, the gap between bounding boxes is typically ≤ 0.5× line height
+        // (the rest of the line-height is absorbed by the bounding box itself).
+        // A blank line between paragraphs adds roughly 1× line height of extra space.
+        // Using 0.8× as threshold cleanly separates intra-paragraph gaps from inter-paragraph gaps.
         let verticalGap = max(previous.boundingBox.minY - next.boundingBox.maxY, 0)
-        guard verticalGap <= max(previousHeight, nextHeight) * 1.2 else { return false }
+        guard verticalGap <= max(previousHeight, nextHeight) * 0.8 else { return false }
 
         // Require meaningful horizontal overlap to join lines into a paragraph.
         // Left-edge proximity alone is insufficient — headings and body text share a left margin
