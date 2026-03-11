@@ -151,10 +151,14 @@ final class OCRService {
             }
 
             if var lastGroup = grouped.last,
-               let lastLine = lastGroup.last,
-               shouldJoinParagraph(previous: lastLine, next: line) {
-                lastGroup.append(line)
-                grouped[grouped.count - 1] = lastGroup
+               let lastLine = lastGroup.last {
+                let shouldJoin = shouldJoinParagraph(previous: lastLine, next: line)
+                if shouldJoin {
+                    lastGroup.append(line)
+                    grouped[grouped.count - 1] = lastGroup
+                } else {
+                    grouped.append([line])
+                }
             } else {
                 grouped.append([line])
             }
@@ -438,11 +442,18 @@ final class OCRService {
         let gapThreshold: CGFloat = heightRatio > 1.4 ? maxHeight * 0.5 : maxHeight * 0.8
         guard verticalGap <= gapThreshold else { return false }
 
-        // Require meaningful horizontal overlap to join lines into a paragraph.
-        // Left-edge proximity alone is insufficient — headings and body text share a left margin
-        // but are distinct paragraphs.
-        // Compute horizontal overlap only (X axis), ignoring Y so that vertically-separated
-        // text lines on the same horizontal span are correctly joined.
+        // Require meaningful horizontal overlap OR left-edge alignment to join lines.
+        //
+        // Pure overlap check fails for paragraph lines that wrap differently due to
+        // an adjacent column or sidebar occluding part of the line — Vision may assign
+        // different right-edge extents to each line, yielding zero overlap even though
+        // the lines share the same left margin and clearly belong to the same paragraph.
+        //
+        // Strategy:
+        //   1. If horizontal overlap ≥ 25 % of the shorter line → join (original rule).
+        //   2. Otherwise, if both lines' left edges are within 2× line-height of each
+        //      other AND the shorter line's right edge does not extend clearly to the
+        //      left of the longer line's start → treat as left-aligned continuation.
         let prevMinX = previous.boundingBox.minX
         let prevMaxX = previous.boundingBox.maxX
         let nextMinX = next.boundingBox.minX
@@ -451,7 +462,21 @@ final class OCRService {
         let minWidth = min(previous.boundingBox.width, next.boundingBox.width)
         let horizontalOverlapRatio = minWidth > 0 ? overlapWidth / minWidth : 0
 
-        return horizontalOverlapRatio >= 0.25
+        if horizontalOverlapRatio >= 0.25 {
+            return true
+        }
+
+        // Left-alignment fallback: lines share a left margin (within 2× line height)
+        // and neither line starts significantly to the right of the other's left edge.
+        let leftEdgeDelta = abs(prevMinX - nextMinX)
+        let leftAlignThreshold = maxHeight * 2.0
+        let leftAligned = leftEdgeDelta <= leftAlignThreshold
+
+        // Reject if the lines are clearly side-by-side (right edge of one line is to
+        // the left of the start of the other line by more than a small tolerance).
+        let sideBySide = (prevMaxX + maxHeight < nextMinX) || (nextMaxX + maxHeight < prevMinX)
+
+        return leftAligned && !sideBySide
     }
 
     nonisolated private static func normalizedParagraphText(from lines: [RecognizedTextLine]) -> String {
