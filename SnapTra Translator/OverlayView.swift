@@ -170,146 +170,230 @@ struct OverlayView: View {
 
     private var paragraphLoadingView: some View {
         VStack(alignment: .leading, spacing: 0) {
-            paragraphTopBar(copyText: nil)
+            paragraphTopBar()
 
-            VStack(alignment: .leading, spacing: 10) {
-                Label {
-                    Text(L("识别鼠标所在英文段落中"))
-                        .font(.system(size: 17, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.primary)
-                } icon: {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-
-                HStack(spacing: 8) {
-                    Text(L("正在执行全屏 OCR 与段落定位"))
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                    LoadingDotsView()
-                }
+            paragraphBodyContainer {
+                paragraphStatusCard(
+                    title: paragraphOriginalSectionTitle,
+                    message: L("Detecting text under cursor"),
+                    detail: L("正在执行全屏 OCR 与段落定位"),
+                    systemImage: "text.magnifyingglass",
+                    showsSpinner: true
+                )
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 4)
-            .padding(.bottom, 18)
         }
     }
 
     @ViewBuilder
     private func paragraphResultView(content: ParagraphOverlayContent) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            paragraphTopBar(copyText: content.originalText)
+            paragraphTopBar()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    if let originalText = content.originalText,
-                       !originalText.isEmpty {
-                        paragraphSection(
-                            titleKey: "English",
+            paragraphBodyContainer {
+                if let originalText = content.originalText,
+                   !originalText.isEmpty {
+                    paragraphSectionCard(
+                        title: paragraphOriginalSectionTitle,
+                        copyText: originalText
+                    ) {
+                        paragraphTextContent(
                             text: originalText,
                             font: .systemFont(ofSize: 15, weight: .medium),
-                            foreground: .labelColor
+                            textColor: .labelColor,
+                            lineSpacing: 5
                         )
                     }
-
-                    Divider()
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 12)
-                        .opacity(content.originalText == nil ? 0 : 0.6)
 
                     switch content.translationState {
                     case .loading:
-                        HStack(spacing: 8) {
-                            ProgressView()
-                                .controlSize(.small)
-                            Text(L("Translating"))
-                                .font(.system(size: 13, weight: .medium, design: .rounded))
-                                .foregroundStyle(.secondary)
-                            LoadingDotsView()
+                        paragraphSectionCard(
+                            title: paragraphTranslationSectionTitle,
+                            emphasis: true
+                        ) {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                    .controlSize(.small)
+                                Text(L("Translating"))
+                                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                                LoadingDotsView()
+                            }
                         }
-                        .padding(.horizontal, 18)
-                        .padding(.bottom, 18)
 
-                    case .ready(let text):
-                        paragraphSection(
-                            titleKey: "Translation",
-                            text: text,
-                            font: .systemFont(ofSize: 17, weight: .semibold),
-                            foreground: .labelColor
-                        )
+                    case .ready(let translatedText):
+                        paragraphSectionCard(
+                            title: paragraphTranslationSectionTitle,
+                            copyText: translatedText,
+                            emphasis: true
+                        ) {
+                            paragraphTextContent(
+                                text: translatedText,
+                                font: .systemFont(ofSize: 16, weight: .semibold),
+                                textColor: .labelColor,
+                                lineSpacing: 6
+                            )
+                        }
 
                     case .failed(let message):
-                        HStack(alignment: .top, spacing: 8) {
-                            Image(systemName: "exclamationmark.circle")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                            Text(message)
-                                .font(.system(size: 13, weight: .medium, design: .rounded))
-                                .foregroundStyle(.secondary)
+                        paragraphSectionCard(
+                            title: paragraphTranslationSectionTitle,
+                            emphasis: true
+                        ) {
+                            paragraphErrorContent(message: message)
                         }
-                        .padding(.horizontal, 18)
-                        .padding(.bottom, 18)
                     }
+                } else if case .failed(let message) = content.translationState {
+                    paragraphStatusCard(
+                        title: nil,
+                        message: message,
+                        systemImage: "exclamationmark.circle"
+                    )
                 }
-                .padding(.top, 4)
             }
-            .frame(maxHeight: 320)
         }
     }
 
     @ViewBuilder
-    private func paragraphSection(
-        titleKey: String,
+    private func paragraphBodyContainer<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                content()
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 4)
+            .padding(.bottom, 18)
+        }
+        .frame(maxHeight: 360)
+    }
+
+    @ViewBuilder
+    private func paragraphSectionCard<Content: View>(
+        title: String?,
+        copyText: String? = nil,
+        emphasis: Bool = false,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                if let title, !title.isEmpty {
+                    Text(title)
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .tracking(0.2)
+                }
+
+                Spacer(minLength: 8)
+
+                if let copyText, !copyText.isEmpty {
+                    ParagraphSectionCopyButton(text: copyText)
+                }
+            }
+
+            content()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 15)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(paragraphCardFill(emphasis: emphasis))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(paragraphCardStroke(emphasis: emphasis), lineWidth: 1)
+        }
+    }
+
+    @ViewBuilder
+    private func paragraphStatusCard(
+        title: String?,
+        message: String,
+        detail: String? = nil,
+        systemImage: String,
+        showsSpinner: Bool = false
+    ) -> some View {
+        paragraphSectionCard(title: title) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .center, spacing: 10) {
+                    if showsSpinner {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: systemImage)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Text(message)
+                        .font(.system(size: 15, weight: .medium, design: .rounded))
+                        .foregroundStyle(.primary)
+                }
+
+                if let detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func paragraphTextContent(
         text: String,
         font: NSFont,
-        foreground: NSColor
+        textColor: NSColor,
+        lineSpacing: CGFloat
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(L(titleKey))
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-
-            SelectableTextView(
-                text: text,
-                font: font,
-                textColor: foreground
-            )
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.horizontal, 18)
-        .padding(.bottom, 18)
+        SelectableTextView(
+            text: text,
+            font: font,
+            textColor: textColor,
+            lineSpacing: lineSpacing
+        )
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
-    private func paragraphTopBar(copyText: String?) -> some View {
-        HStack(spacing: 8) {
-            Text(L("Paragraph"))
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
+    private func paragraphErrorContent(message: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.circle")
+                .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.secondary)
-                .tracking(0.5)
-                .textCase(.uppercase)
+            Text(message)
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
 
-            Spacer()
+    @ViewBuilder
+    private func paragraphTopBar() -> some View {
+        ZStack {
+            Capsule()
+                .fill(.secondary.opacity(0.18))
+                .frame(width: 36, height: 4)
 
-            if showsParagraphOverlayControls, let copyText, !copyText.isEmpty {
-                CopyButton(text: copyText)
-            }
+            HStack {
+                Spacer()
 
-            if showsParagraphOverlayControls {
-                Button {
-                    model.dismissOverlay()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 20, height: 20)
-                        .background(
-                            Circle()
-                                .fill(.secondary.opacity(0.1))
-                        )
+                if showsParagraphOverlayControls {
+                    Button {
+                        model.dismissOverlay()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 20, height: 20)
+                            .background(
+                                Circle()
+                                    .fill(.secondary.opacity(0.1))
+                            )
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
         .contentShape(Rectangle())
@@ -320,6 +404,74 @@ struct OverlayView: View {
         .padding(.horizontal, 18)
         .padding(.top, 16)
         .padding(.bottom, 12)
+    }
+
+    private var paragraphOriginalSectionTitle: String {
+        paragraphSectionTitle(labelKey: "Original", languageIdentifier: "en")
+    }
+
+    private var paragraphTranslationSectionTitle: String {
+        paragraphSectionTitle(labelKey: "Translation", languageIdentifier: model.settings.targetLanguage)
+    }
+
+    private func paragraphSectionTitle(labelKey: String, languageIdentifier: String) -> String {
+        "\(L(labelKey)) (\(paragraphLanguageDisplayName(for: languageIdentifier)))"
+    }
+
+    private func paragraphLanguageDisplayName(for identifier: String) -> String {
+        let normalizedIdentifier = paragraphNormalizedLanguageIdentifier(for: identifier)
+        let locale = paragraphDisplayLocale
+
+        if let localizedName = locale.localizedString(forIdentifier: normalizedIdentifier) {
+            return localizedName
+        }
+
+        if let languageCode = Locale(identifier: normalizedIdentifier).language.languageCode?.identifier,
+           let localizedName = locale.localizedString(forLanguageCode: languageCode) {
+            return localizedName
+        }
+
+        return normalizedIdentifier
+    }
+
+    private var paragraphDisplayLocale: Locale {
+        if let localeIdentifier = model.settings.appLanguage.localeIdentifier {
+            return Locale(identifier: localeIdentifier)
+        }
+
+        if let preferredLanguage = Locale.preferredLanguages.first {
+            return Locale(identifier: preferredLanguage)
+        }
+
+        return .current
+    }
+
+    private func paragraphNormalizedLanguageIdentifier(for identifier: String) -> String {
+        if identifier.hasPrefix("zh-Hans") {
+            return "zh-Hans"
+        }
+
+        if identifier.hasPrefix("zh-Hant") {
+            return "zh-Hant"
+        }
+
+        return identifier
+    }
+
+    private func paragraphCardFill(emphasis: Bool) -> Color {
+        if colorScheme == .dark {
+            return emphasis ? .white.opacity(0.09) : .white.opacity(0.06)
+        }
+
+        return emphasis ? .black.opacity(0.055) : .black.opacity(0.035)
+    }
+
+    private func paragraphCardStroke(emphasis: Bool) -> Color {
+        if colorScheme == .dark {
+            return emphasis ? .white.opacity(0.14) : .white.opacity(0.08)
+        }
+
+        return emphasis ? .black.opacity(0.08) : .black.opacity(0.05)
     }
 
     private var paragraphHeaderDragGesture: some Gesture {
@@ -909,6 +1061,7 @@ private struct SelectableTextView: NSViewRepresentable {
     let text: String
     let font: NSFont
     let textColor: NSColor
+    let lineSpacing: CGFloat
 
     func makeNSView(context: Context) -> NSTextView {
         let textView = NSTextView(frame: .zero)
@@ -957,6 +1110,7 @@ private struct SelectableTextView: NSViewRepresentable {
     private func makeAttributedString() -> NSAttributedString {
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineBreakMode = .byWordWrapping
+        paragraphStyle.lineSpacing = lineSpacing
 
         return NSAttributedString(
             string: text,
@@ -966,6 +1120,42 @@ private struct SelectableTextView: NSViewRepresentable {
                 .paragraphStyle: paragraphStyle,
             ]
         )
+    }
+}
+
+private struct ParagraphSectionCopyButton: View {
+    let text: String
+    @State private var copied = false
+
+    var body: some View {
+        Button {
+            copyToClipboard(text)
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+                copied = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    copied = false
+                }
+            }
+        } label: {
+            Label(copied ? L("Copied") : L("Copy"), systemImage: copied ? "checkmark" : "doc.on.doc")
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(copied ? Color(red: 0.2, green: 0.7, blue: 0.35) : .secondary)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(copied ? Color(red: 0.2, green: 0.7, blue: 0.35).opacity(0.12) : Color.secondary.opacity(0.08))
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func copyToClipboard(_ text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
     }
 }
 

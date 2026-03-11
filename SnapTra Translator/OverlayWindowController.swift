@@ -209,7 +209,7 @@ final class OverlayWindowController: NSWindowController {
         window?.isVisible == true
     }
 
-    func show(at anchor: CGPoint) {
+    func show(at anchor: CGPoint, makeKey: Bool = false) {
         guard let window else { return }
         lastAnchor = anchor
         let targetFrame = measuredFrame(for: anchor)
@@ -217,6 +217,9 @@ final class OverlayWindowController: NSWindowController {
         if !window.isVisible {
             window.setFrame(targetFrame, display: true)
             window.orderFrontRegardless()
+            if makeKey {
+                window.makeKey()
+            }
         } else {
             applyFrameIfNeeded(targetFrame)
         }

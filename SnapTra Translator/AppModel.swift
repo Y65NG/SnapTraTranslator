@@ -795,7 +795,7 @@ final class AppModel: ObservableObject {
             if overlayWindowController.isVisible {
                 scheduleOverlayLayoutRefresh()
             } else {
-                overlayWindowController.show(at: overlayAnchor)
+                overlayWindowController.show(at: overlayAnchor, makeKey: activeLookupMode == .paragraph)
             }
             if activeLookupMode == .paragraph || !settings.continuousTranslation {
                 overlayWindowController.setInteractive(true)
@@ -807,7 +807,7 @@ final class AppModel: ObservableObject {
             if overlayWindowController.isVisible {
                 scheduleOverlayLayoutRefresh()
             } else {
-                overlayWindowController.show(at: overlayAnchor)
+                overlayWindowController.show(at: overlayAnchor, makeKey: activeLookupMode == .paragraph)
             }
             if activeLookupMode == .paragraph {
                 overlayWindowController.setInteractive(true)
