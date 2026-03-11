@@ -7,11 +7,36 @@ struct RecognizedWord: Equatable {
     var boundingBox: CGRect
 }
 
+struct RecognizedTextLine: Equatable {
+    var text: String
+    var boundingBox: CGRect
+}
+
+struct RecognizedParagraph: Equatable {
+    var text: String
+    var lines: [RecognizedTextLine]
+    var boundingBox: CGRect
+}
+
 final class OCRService {
     func recognizeWords(in image: CGImage, language: String) async throws -> [RecognizedWord] {
+        let observations = try await recognizeObservations(in: image, language: language)
+        return OCRService.extractWords(from: observations)
+    }
+
+    func recognizeParagraphs(in image: CGImage, language: String) async throws -> [RecognizedParagraph] {
+        let observations = try await recognizeObservations(in: image, language: language)
+        let lines = OCRService.extractLines(from: observations)
+        return OCRService.groupParagraphs(from: lines)
+    }
+
+    private func recognizeObservations(
+        in image: CGImage,
+        language: String
+    ) async throws -> [VNRecognizedTextObservation] {
         try Task.checkCancellation()
 
-        return try await withThrowingTaskGroup(of: [RecognizedWord].self) { group in
+        return try await withThrowingTaskGroup(of: [VNRecognizedTextObservation].self) { group in
             group.addTask(priority: .userInitiated) {
                 try Task.checkCancellation()
 
@@ -31,18 +56,12 @@ final class OCRService {
                 try handler.perform([request])
                 try Task.checkCancellation()
 
-                guard let observations = request.results else {
-                    return []
-                }
-
-                let words = OCRService.extractWords(from: observations)
-                try Task.checkCancellation()
-                return words
+                return request.results ?? []
             }
 
-            let words = try await group.next() ?? []
+            let observations = try await group.next() ?? []
             group.cancelAll()
-            return words
+            return observations
         }
     }
 
@@ -88,6 +107,93 @@ final class OCRService {
             }
         }
         return words
+    }
+
+    nonisolated static func extractLines(from observations: [VNRecognizedTextObservation]) -> [RecognizedTextLine] {
+        observations.compactMap { observation in
+            guard let candidate = observation.topCandidates(1).first else {
+                return nil
+            }
+
+            let text = candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else {
+                return nil
+            }
+
+            return RecognizedTextLine(text: text, boundingBox: observation.boundingBox)
+        }
+    }
+
+    nonisolated static func groupParagraphs(from lines: [RecognizedTextLine]) -> [RecognizedParagraph] {
+        let sortedLines = lines.sorted { lhs, rhs in
+            if abs(lhs.boundingBox.midY - rhs.boundingBox.midY) > 0.01 {
+                return lhs.boundingBox.midY > rhs.boundingBox.midY
+            }
+            return lhs.boundingBox.minX < rhs.boundingBox.minX
+        }
+
+        var grouped: [[RecognizedTextLine]] = []
+
+        for line in sortedLines {
+            guard containsLikelyParagraphContent(line.text) else {
+                continue
+            }
+
+            if var lastGroup = grouped.last,
+               let lastLine = lastGroup.last,
+               shouldJoinParagraph(previous: lastLine, next: line) {
+                lastGroup.append(line)
+                grouped[grouped.count - 1] = lastGroup
+            } else {
+                grouped.append([line])
+            }
+        }
+
+        return grouped.compactMap { lines in
+            guard let firstLine = lines.first else { return nil }
+            let text = normalizedParagraphText(from: lines)
+            guard isLikelyEnglishParagraph(text) else {
+                return nil
+            }
+
+            let boundingBox = lines.dropFirst().reduce(firstLine.boundingBox) { partialResult, line in
+                partialResult.union(line.boundingBox)
+            }
+
+            return RecognizedParagraph(
+                text: text,
+                lines: lines,
+                boundingBox: boundingBox
+            )
+        }
+    }
+
+    nonisolated static func selectParagraph(
+        from paragraphs: [RecognizedParagraph],
+        normalizedPoint: CGPoint
+    ) -> RecognizedParagraph? {
+        let tolerance: CGFloat = 0.01
+        let containing = paragraphs.filter { paragraph in
+            paragraph.boundingBox.insetBy(dx: -tolerance, dy: -tolerance).contains(normalizedPoint)
+        }
+
+        if !containing.isEmpty {
+            return containing.min { lhs, rhs in
+                let lhsDistance = hypot(lhs.boundingBox.midX - normalizedPoint.x, lhs.boundingBox.midY - normalizedPoint.y)
+                let rhsDistance = hypot(rhs.boundingBox.midX - normalizedPoint.x, rhs.boundingBox.midY - normalizedPoint.y)
+                return lhsDistance < rhsDistance
+            }
+        }
+
+        let maxDistance: CGFloat = 0.18
+        return paragraphs
+            .compactMap { paragraph -> (RecognizedParagraph, CGFloat)? in
+                let distance = hypot(paragraph.boundingBox.midX - normalizedPoint.x, paragraph.boundingBox.midY - normalizedPoint.y)
+                guard distance <= maxDistance else { return nil }
+                return (paragraph, distance)
+            }
+            .min(by: { lhs, rhs in lhs.1 < rhs.1 })?
+            .0
     }
 
     // 只包含英语字母，数字和其他符号都作为分隔符
@@ -236,5 +342,63 @@ final class OCRService {
 
     nonisolated private static func containsLetter(in token: Substring) -> Bool {
         token.unicodeScalars.contains { letterSet.contains($0) }
+    }
+
+    nonisolated private static func shouldJoinParagraph(
+        previous: RecognizedTextLine,
+        next: RecognizedTextLine
+    ) -> Bool {
+        let previousHeight = previous.boundingBox.height
+        let nextHeight = next.boundingBox.height
+        let minHeight = min(previousHeight, nextHeight)
+        let maxHeight = max(previousHeight, nextHeight)
+        guard minHeight > 0 else { return false }
+
+        let heightRatio = maxHeight / minHeight
+        guard heightRatio <= 1.8 else { return false }
+
+        let verticalGap = max(previous.boundingBox.minY - next.boundingBox.maxY, 0)
+        guard verticalGap <= max(previousHeight, nextHeight) * 1.6 else { return false }
+
+        let overlapWidth = previous.boundingBox.intersection(next.boundingBox).width
+        let minWidth = min(previous.boundingBox.width, next.boundingBox.width)
+        let horizontalOverlapRatio = minWidth > 0 ? overlapWidth / minWidth : 0
+        let leftEdgeDistance = abs(previous.boundingBox.minX - next.boundingBox.minX)
+
+        if horizontalOverlapRatio >= 0.25 {
+            return true
+        }
+
+        return leftEdgeDistance <= max(previousHeight, nextHeight) * 4
+    }
+
+    nonisolated private static func normalizedParagraphText(from lines: [RecognizedTextLine]) -> String {
+        lines
+            .map(\.text)
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    nonisolated private static func containsLikelyParagraphContent(_ text: String) -> Bool {
+        text.unicodeScalars.contains { letterSet.contains($0) || $0.properties.isIdeographic }
+    }
+
+    nonisolated private static func isLikelyEnglishParagraph(_ text: String) -> Bool {
+        let letters = text.unicodeScalars.filter { letterSet.contains($0) }
+        guard letters.count >= 12 else {
+            return false
+        }
+
+        let englishLetters = text.unicodeScalars.filter { tokenCharacterSet.contains($0) }
+        guard !letters.isEmpty else {
+            return false
+        }
+
+        let englishRatio = Double(englishLetters.count) / Double(letters.count)
+        let words = text.split(whereSeparator: \.isWhitespace).filter { token in
+            token.unicodeScalars.contains { tokenCharacterSet.contains($0) }
+        }
+
+        return englishRatio >= 0.65 && words.count >= 3
     }
 }

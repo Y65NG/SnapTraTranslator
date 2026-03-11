@@ -4,8 +4,27 @@ import SwiftUI
 struct OverlayView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.colorScheme) private var colorScheme
-    private let overlayWidth: CGFloat = 380
+    private let wordOverlayWidth: CGFloat = 380
+    private let paragraphOverlayWidth: CGFloat = 520
     private let compactSectionMinHeight: CGFloat = 28
+
+    private var overlayWidth: CGFloat {
+        switch model.overlayState {
+        case .paragraphLoading, .paragraphResult:
+            return paragraphOverlayWidth
+        default:
+            return wordOverlayWidth
+        }
+    }
+
+    private var showsParagraphOverlayControls: Bool {
+        switch model.overlayState {
+        case .paragraphLoading, .paragraphResult:
+            return true
+        default:
+            return !model.settings.continuousTranslation
+        }
+    }
 
     private var isVisible: Bool {
         if case .idle = model.overlayState { return false }
@@ -32,6 +51,12 @@ struct OverlayView: View {
 
             case .result(let content):
                 resultView(content: content)
+
+            case .paragraphLoading:
+                paragraphLoadingView
+
+            case .paragraphResult(let content):
+                paragraphResultView(content: content)
 
             case .error(let message):
                 errorView(message: message)
@@ -122,6 +147,153 @@ struct OverlayView: View {
                 dictionarySectionsView(sections: content.dictionarySections)
             }
         }
+    }
+
+    private var paragraphLoadingView: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            paragraphTopBar(copyText: nil)
+
+            VStack(alignment: .leading, spacing: 10) {
+                Label {
+                    Text("识别鼠标所在英文段落中")
+                        .font(.system(size: 17, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                } icon: {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+
+                HStack(spacing: 8) {
+                    Text("正在执行全屏 OCR 与段落定位")
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                    LoadingDotsView()
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 4)
+            .padding(.bottom, 18)
+        }
+    }
+
+    @ViewBuilder
+    private func paragraphResultView(content: ParagraphOverlayContent) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            paragraphTopBar(copyText: content.originalText)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if let originalText = content.originalText,
+                       !originalText.isEmpty {
+                        paragraphSection(
+                            title: "English",
+                            text: originalText,
+                            font: .system(size: 15, weight: .medium, design: .rounded),
+                            foreground: .primary
+                        )
+                    }
+
+                    Divider()
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 12)
+                        .opacity(content.originalText == nil ? 0 : 0.6)
+
+                    switch content.translationState {
+                    case .loading:
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text(L("Translating"))
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                .foregroundStyle(.secondary)
+                            LoadingDotsView()
+                        }
+                        .padding(.horizontal, 18)
+                        .padding(.bottom, 18)
+
+                    case .ready(let text):
+                        paragraphSection(
+                            title: "Translation",
+                            text: text,
+                            font: .system(size: 17, weight: .semibold, design: .rounded),
+                            foreground: .primary
+                        )
+
+                    case .failed(let message):
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "exclamationmark.circle")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                            Text(message)
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 18)
+                        .padding(.bottom, 18)
+                    }
+                }
+                .padding(.top, 4)
+            }
+            .frame(maxHeight: 320)
+        }
+    }
+
+    @ViewBuilder
+    private func paragraphSection(
+        title: String,
+        text: String,
+        font: Font,
+        foreground: Color
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+
+            Text(text)
+                .font(font)
+                .foregroundStyle(foreground)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 18)
+        .padding(.bottom, 18)
+    }
+
+    @ViewBuilder
+    private func paragraphTopBar(copyText: String?) -> some View {
+        HStack(spacing: 8) {
+            Text("Paragraph")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .tracking(0.5)
+                .textCase(.uppercase)
+
+            Spacer()
+
+            if showsParagraphOverlayControls, let copyText, !copyText.isEmpty {
+                CopyButton(text: copyText)
+            }
+
+            if showsParagraphOverlayControls {
+                Button {
+                    model.dismissOverlay()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 20, height: 20)
+                        .background(
+                            Circle()
+                                .fill(.secondary.opacity(0.1))
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 16)
+        .padding(.bottom, 12)
     }
 
     @ViewBuilder

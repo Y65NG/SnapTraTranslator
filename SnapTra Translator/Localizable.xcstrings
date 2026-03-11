@@ -3229,6 +3229,9 @@
         }
       }
     },
+    "Paragraph" : {
+
+    },
     "Permissions" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5170,6 +5173,12 @@
           }
         }
       }
+    },
+    "正在执行全屏 OCR 与段落定位" : {
+
+    },
+    "识别鼠标所在英文段落中" : {
+
     }
   },
   "version" : "1.0"

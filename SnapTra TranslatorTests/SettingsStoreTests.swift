@@ -28,30 +28,27 @@ final class SettingsStoreMigrationTests: XCTestCase {
 
         XCTAssertEqual(
             sources.map(\.type),
-            [.ecdict, .system, .google, .bing, .youdao, .deepl]
+            [.ecdict, .system, .freeDict]
         )
         XCTAssertTrue(sources.contains { $0.type == .system && $0.isEnabled })
-        XCTAssertTrue(sources.contains { $0.type == .google && !$0.isEnabled })
-        XCTAssertTrue(sources.contains { $0.type == .bing && !$0.isEnabled })
-        XCTAssertTrue(sources.contains { $0.type == .youdao && !$0.isEnabled })
-        XCTAssertTrue(sources.contains { $0.type == .deepl && !$0.isEnabled })
+        XCTAssertTrue(sources.contains { $0.type == .freeDict && $0.isEnabled })
     }
 
-    func testMigrationAppendsOnlineProvidersWithoutChangingExistingOrder() {
+    func testMigrationRemovesHiddenProvidersAndAppendsFreeDictionary() {
         let existing: [DictionarySource] = [
             DictionarySource(id: UUID(), name: "System Dictionary", type: .system, isEnabled: true),
-            DictionarySource(id: UUID(), name: "WordNet", type: .wordNet, isEnabled: false),
             DictionarySource(id: UUID(), name: "Advanced Dictionary", type: .ecdict, isEnabled: true),
+            DictionarySource(id: UUID(), name: "Google Translate", type: .google, isEnabled: false),
         ]
         let migrated = SettingsStore.migrateDictionarySources(existing)
 
         XCTAssertEqual(
             migrated.map(\.type),
-            [.system, .wordNet, .ecdict, .google, .bing, .youdao, .deepl]
+            [.system, .ecdict, .freeDict]
         )
         XCTAssertEqual(
             migrated.filter(\.isEnabled).map(\.type),
-            [.system, .ecdict]
+            [.system, .ecdict, .freeDict]
         )
     }
 }

@@ -11,6 +11,7 @@ struct CaptureRegion {
 
 final class ScreenCaptureService {
     let captureSize = CGSize(width: 520, height: 140)
+    let paragraphCaptureScale: CGFloat = 0.6
     
     private var cachedDisplay: SCDisplay?
     private var cachedDisplayID: CGDirectDisplayID?
@@ -19,7 +20,7 @@ final class ScreenCaptureService {
 
     func captureAroundCursor() async -> (image: CGImage, region: CaptureRegion)? {
         let mouseLocation = NSEvent.mouseLocation
-        guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouseLocation, $0.frame, false) }) else {
+        guard let screen = screen(containing: mouseLocation) else {
             return nil
         }
         guard let displayNumber = screen.deviceDescription[.init("NSScreenNumber")] as? NSNumber else {
@@ -36,6 +37,37 @@ final class ScreenCaptureService {
             
             let filter = SCContentFilter(display: display, excludingWindows: [])
             let configuration = makeConfiguration(for: cgRect, scaleFactor: scaleFactor)
+            let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
+            return (image, CaptureRegion(rect: rectInScreen, screen: screen, displayID: displayID, scaleFactor: scaleFactor))
+        } catch {
+            return nil
+        }
+    }
+
+    func captureCurrentDisplay() async -> (image: CGImage, region: CaptureRegion)? {
+        let mouseLocation = NSEvent.mouseLocation
+        guard let screen = screen(containing: mouseLocation) else {
+            return nil
+        }
+        guard let displayNumber = screen.deviceDescription[.init("NSScreenNumber")] as? NSNumber else {
+            return nil
+        }
+
+        let displayID = CGDirectDisplayID(displayNumber.int32Value)
+        let scaleFactor = screen.backingScaleFactor
+        let rectInScreen = screen.frame
+        let cgRect = convertToDisplayLocalCoordinates(rectInScreen, screen: screen)
+
+        do {
+            let display = try await getDisplay(for: displayID)
+            guard let display else { return nil }
+
+            let filter = SCContentFilter(display: display, excludingWindows: [])
+            let configuration = makeConfiguration(
+                for: cgRect,
+                scaleFactor: scaleFactor,
+                resolutionScale: paragraphCaptureScale
+            )
             let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
             return (image, CaptureRegion(rect: rectInScreen, screen: screen, displayID: displayID, scaleFactor: scaleFactor))
         } catch {
@@ -70,6 +102,10 @@ final class ScreenCaptureService {
         return display
     }
 
+    private func screen(containing point: CGPoint) -> NSScreen? {
+        NSScreen.screens.first(where: { NSMouseInRect(point, $0.frame, false) })
+    }
+
     private func captureRect(for point: CGPoint, in screenFrame: CGRect, size: CGSize) -> CGRect {
         let origin = CGPoint(x: point.x - size.width / 2, y: point.y - size.height / 2)
         let rawRect = CGRect(origin: origin, size: size)
@@ -84,11 +120,16 @@ final class ScreenCaptureService {
         return CGRect(x: localX, y: flippedY, width: rect.width, height: rect.height)
     }
 
-    private func makeConfiguration(for rect: CGRect, scaleFactor: CGFloat) -> SCStreamConfiguration {
+    private func makeConfiguration(
+        for rect: CGRect,
+        scaleFactor: CGFloat,
+        resolutionScale: CGFloat = 1
+    ) -> SCStreamConfiguration {
         let configuration = SCStreamConfiguration()
         configuration.sourceRect = rect
-        let pixelWidth = Int(rect.width * scaleFactor)
-        let pixelHeight = Int(rect.height * scaleFactor)
+        let clampedScale = max(resolutionScale, 0.1)
+        let pixelWidth = max(Int(rect.width * scaleFactor * clampedScale), 1)
+        let pixelHeight = max(Int(rect.height * scaleFactor * clampedScale), 1)
         configuration.width = pixelWidth
         configuration.height = pixelHeight
         configuration.queueDepth = 1

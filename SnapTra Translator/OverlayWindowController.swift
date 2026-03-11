@@ -79,6 +79,88 @@ final class DebugOverlayWindowController: NSWindowController {
     }
 }
 
+// MARK: - Paragraph Highlight View
+
+private struct ParagraphHighlightView: View {
+    var body: some View {
+        GeometryReader { geometry in
+            let lineWidth: CGFloat = 3
+            Path { path in
+                let rect = CGRect(origin: .zero, size: geometry.size)
+                let cornerLength = min(min(rect.width, rect.height) * 0.22, 22)
+
+                path.move(to: CGPoint(x: rect.minX, y: rect.maxY - cornerLength))
+                path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+                path.addLine(to: CGPoint(x: rect.minX + cornerLength, y: rect.maxY))
+
+                path.move(to: CGPoint(x: rect.maxX - cornerLength, y: rect.maxY))
+                path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+                path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - cornerLength))
+
+                path.move(to: CGPoint(x: rect.minX, y: rect.minY + cornerLength))
+                path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+                path.addLine(to: CGPoint(x: rect.minX + cornerLength, y: rect.minY))
+
+                path.move(to: CGPoint(x: rect.maxX - cornerLength, y: rect.minY))
+                path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+                path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + cornerLength))
+            }
+            .stroke(
+                Color(red: 0.18, green: 0.88, blue: 0.42),
+                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round)
+            )
+        }
+    }
+}
+
+final class ParagraphHighlightWindowController: NSWindowController {
+    private let hostingView: NSHostingView<ParagraphHighlightView>
+
+    override init(window: NSWindow?) {
+        hostingView = NSHostingView(rootView: ParagraphHighlightView())
+        let panel = NSPanel(
+            contentRect: .zero,
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.contentView = hostingView
+        panel.isReleasedWhenClosed = false
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = false
+        panel.level = .screenSaver
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.ignoresMouseEvents = true
+        panel.isMovableByWindowBackground = false
+        super.init(window: panel)
+    }
+
+    convenience init() {
+        self.init(window: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func show(at rect: CGRect) {
+        guard rect.width > 0, rect.height > 0 else {
+            hide()
+            return
+        }
+
+        guard let window else { return }
+        window.setFrame(rect, display: true)
+        window.orderFrontRegardless()
+    }
+
+    func hide() {
+        window?.orderOut(nil)
+    }
+}
+
 // MARK: - Overlay Window Controller
 
 final class OverlayWindowController: NSWindowController {

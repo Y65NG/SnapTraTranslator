@@ -11,6 +11,8 @@
 		42600FB0442E5C482935C055 /* LookupDirectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6753B831E5133F53A37B1D3A /* LookupDirectionTests.swift */; };
 		49229076477461F5BCBECBC3 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D0878597B29F37191DDAD9BF /* Cocoa.framework */; };
 		4948C18D22CBE0101C82D281 /* SmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 423F1844E7A13D4E51660DC4 /* SmokeTests.swift */; };
+		E1A111111111111111111111 /* HotkeyManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B111111111111111111111 /* HotkeyManagerTests.swift */; };
+		E1A222222222222222222222 /* OCRParagraphGroupingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B222222222222222222222 /* OCRParagraphGroupingTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -30,6 +32,8 @@
 		CA9FDDCF14665092D5945F0C /* SnapTra TranslatorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "SnapTra TranslatorTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		D0878597B29F37191DDAD9BF /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/Cocoa.framework; sourceTree = DEVELOPER_DIR; };
 		D3F4D8FE2F14D1A2004035A9 /* SnapTra Translator.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "SnapTra Translator.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		E1B111111111111111111111 /* HotkeyManagerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HotkeyManagerTests.swift; sourceTree = "<group>"; };
+		E1B222222222222222222222 /* OCRParagraphGroupingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OCRParagraphGroupingTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -73,6 +77,8 @@
 				423F1844E7A13D4E51660DC4 /* SmokeTests.swift */,
 				6753B831E5133F53A37B1D3A /* LookupDirectionTests.swift */,
 				A9757C4D27EFDE23144043C9 /* SettingsStoreTests.swift */,
+				E1B111111111111111111111 /* HotkeyManagerTests.swift */,
+				E1B222222222222222222222 /* OCRParagraphGroupingTests.swift */,
 			);
 			path = "SnapTra TranslatorTests";
 			sourceTree = "<group>";
@@ -209,6 +215,8 @@
 				4948C18D22CBE0101C82D281 /* SmokeTests.swift in Sources */,
 				42600FB0442E5C482935C055 /* LookupDirectionTests.swift in Sources */,
 				246061597EB29A21F9316CDF /* SettingsStoreTests.swift in Sources */,
+				E1A111111111111111111111 /* HotkeyManagerTests.swift in Sources */,
+				E1A222222222222222222222 /* OCRParagraphGroupingTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

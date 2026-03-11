@@ -77,10 +77,23 @@ enum OverlayDictionarySectionState: Equatable {
     case failed(String)
 }
 
+struct ParagraphOverlayContent: Equatable {
+    var originalText: String?
+    var translationState: ParagraphOverlayTranslationState
+}
+
+enum ParagraphOverlayTranslationState: Equatable {
+    case loading
+    case ready(String)
+    case failed(String)
+}
+
 enum OverlayState: Equatable {
     case idle
     case loading(String?)
     case result(OverlayContent)
+    case paragraphLoading
+    case paragraphResult(ParagraphOverlayContent)
     case error(String)
     case noWord
 }
@@ -124,6 +137,11 @@ private struct DictionarySectionResult {
     let fallbackTranslation: String?
 }
 
+private enum ActiveLookupMode {
+    case word
+    case paragraph
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var overlayState: OverlayState = .idle
@@ -150,6 +168,7 @@ final class AppModel: ObservableObject {
     private var lookupTask: Task<Void, Never>?
     private var activeLookupID: UUID?
     private var isHotkeyActive = false
+    private var activeLookupMode: ActiveLookupMode = .word
     private var lastAvailabilityKey: String?
     private var cachedLanguageStatuses: [String: CachedLanguageAvailabilityStatus] = [:]
 
@@ -163,6 +182,7 @@ final class AppModel: ObservableObject {
     private let positionThreshold: CGFloat = 10.0
 
     private let debugOverlayWindowController = DebugOverlayWindowController()
+    private let paragraphHighlightWindowController = ParagraphHighlightWindowController()
     lazy var overlayWindowController = OverlayWindowController(model: self)
 
     @MainActor
@@ -210,6 +230,9 @@ final class AppModel: ObservableObject {
         hotkeyManager.onRelease = { [weak self] in
             self?.handleHotkeyRelease()
         }
+        hotkeyManager.onDoubleTap = { [weak self] in
+            self?.handleHotkeyDoubleTap()
+        }
         resolvedPermissions.refreshStatus()
         Task {
             await checkLanguageAvailability()
@@ -218,6 +241,8 @@ final class AppModel: ObservableObject {
 
     func handleHotkeyTrigger() {
         isHotkeyActive = true
+        activeLookupMode = .word
+        paragraphHighlightWindowController.hide()
         let mouseLocation = NSEvent.mouseLocation
         lastOcrPosition = mouseLocation
         setOverlayAnchor(mouseLocation)
@@ -228,16 +253,31 @@ final class AppModel: ObservableObject {
 
     func handleHotkeyRelease() {
         isHotkeyActive = false
+        activeLookupMode = .word
         stopMouseTracking()
         debugOverlayWindowController.hide()
+        paragraphHighlightWindowController.hide()
 
         // 松开快捷键时隐藏气泡
         cancelActiveLookupWork()
         hideOverlay()
     }
 
+    func handleHotkeyDoubleTap() {
+        guard isHotkeyActive else { return }
+        isHotkeyActive = false
+        activeLookupMode = .paragraph
+        stopMouseTracking()
+        let mouseLocation = NSEvent.mouseLocation
+        setOverlayAnchor(mouseLocation)
+        updateOverlay(state: .paragraphLoading, anchor: mouseLocation)
+        startParagraphLookup()
+    }
+
     /// 手动关闭气泡（用于非持续翻译模式）
     func dismissOverlay() {
+        activeLookupMode = .word
+        isHotkeyActive = false
         cancelActiveLookupWork()
         hideOverlay()
     }
@@ -275,6 +315,7 @@ final class AppModel: ObservableObject {
     
     private func handleMouseMoved() {
         guard isHotkeyActive else { return }
+        guard activeLookupMode == .word else { return }
 
         // 如果关闭了持续翻译，鼠标移动不触发翻译
         guard settings.continuousTranslation else { return }
@@ -311,11 +352,21 @@ final class AppModel: ObservableObject {
     }
 
     private func startLookup() {
+        activeLookupMode = .word
         cancelActiveLookupWork()
         let lookupID = UUID()
         activeLookupID = lookupID
         lookupTask = Task { [weak self] in
             await self?.performLookup(lookupID: lookupID)
+        }
+    }
+
+    private func startParagraphLookup() {
+        cancelActiveLookupWork()
+        let lookupID = UUID()
+        activeLookupID = lookupID
+        lookupTask = Task { [weak self] in
+            await self?.performParagraphLookup(lookupID: lookupID)
         }
     }
 
@@ -444,6 +495,78 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func performParagraphLookup(lookupID: UUID) async {
+        guard !Task.isCancelled, activeLookupID == lookupID else { return }
+        guard permissions.status.screenRecording else {
+            updateOverlay(state: .error(L("Enable Screen Recording")), anchor: NSEvent.mouseLocation)
+            return
+        }
+
+        let mouseLocation = NSEvent.mouseLocation
+        updateOverlay(state: .paragraphLoading, anchor: mouseLocation)
+
+        guard let capture = await captureService.captureCurrentDisplay() else {
+            paragraphHighlightWindowController.hide()
+            updateOverlay(state: .error(L("Capture failed")), anchor: mouseLocation)
+            return
+        }
+
+        let normalizedPoint = normalizedCursorPoint(mouseLocation, in: capture.region.rect)
+
+        do {
+            let paragraphs = try await ocrService.recognizeParagraphs(
+                in: capture.image,
+                language: "en"
+            )
+            guard !Task.isCancelled, activeLookupID == lookupID else { return }
+
+            guard let paragraph = OCRService.selectParagraph(from: paragraphs, normalizedPoint: normalizedPoint) else {
+                paragraphHighlightWindowController.hide()
+                let content = ParagraphOverlayContent(
+                    originalText: nil,
+                    translationState: .failed(L("No English paragraph detected under cursor"))
+                )
+                updateOverlay(state: .paragraphResult(content), anchor: mouseLocation)
+                return
+            }
+
+            let paragraphRect = screenRect(for: paragraph.boundingBox, in: capture.region.rect)
+            paragraphHighlightWindowController.show(at: paragraphRect)
+
+            let initialContent = ParagraphOverlayContent(
+                originalText: paragraph.text,
+                translationState: .loading
+            )
+            updateOverlay(state: .paragraphResult(initialContent), anchor: mouseLocation)
+
+            let languagePair = resolveParagraphLanguagePair()
+            let sourceLanguage = languagePair.sourceLanguage
+            let targetLanguage = languagePair.targetLanguage
+            let translationState = await loadParagraphTranslationState(
+                text: paragraph.text,
+                languagePair: languagePair,
+                sourceLanguage: sourceLanguage,
+                targetLanguage: targetLanguage,
+                translationBridge: translationBridge
+            )
+
+            applyParagraphTranslationState(
+                translationState,
+                lookupID: lookupID,
+                anchor: mouseLocation
+            )
+        } catch is CancellationError {
+            paragraphHighlightWindowController.hide()
+        } catch {
+            paragraphHighlightWindowController.hide()
+            let content = ParagraphOverlayContent(
+                originalText: nil,
+                translationState: .failed(L("Translation failed: \(error.localizedDescription)"))
+            )
+            updateOverlay(state: .paragraphResult(content), anchor: mouseLocation)
+        }
+    }
+
     private func makeInitialOverlayContent(
         word: String,
         sources: [DictionarySource],
@@ -490,6 +613,41 @@ final class AppModel: ObservableObject {
         }
     }
 
+    private func loadParagraphTranslationState(
+        text: String,
+        languagePair: LookupLanguagePair,
+        sourceLanguage: Locale.Language,
+        targetLanguage: Locale.Language,
+        translationBridge: TranslationBridge
+    ) async -> ParagraphOverlayTranslationState {
+        if languagePair.isSameLanguage {
+            return .ready(text.replacingOccurrences(of: "\n", with: " "))
+        }
+
+        if #available(macOS 15.0, *) {
+            let status = await languageAvailabilityStatus(for: languagePair)
+            guard status == .installed else {
+                return .failed(message(for: status))
+            }
+
+            do {
+                let translated = try await translationBridge.translate(
+                    text: text.replacingOccurrences(of: "\n", with: " "),
+                    source: sourceLanguage,
+                    target: targetLanguage
+                ).trimmingCharacters(in: .whitespacesAndNewlines)
+
+                return translated.isEmpty ? .failed(L("No translation result")) : .ready(translated)
+            } catch TranslationError.timeout {
+                return .failed(L("Translation timeout. Please try again."))
+            } catch {
+                return .failed(L("Translation failed: \(error.localizedDescription)"))
+            }
+        } else {
+            return .failed(L("Translation requires macOS 15"))
+        }
+    }
+
     private func applyPrimaryTranslationState(
         _ state: OverlayPrimaryTranslationState,
         lookupID: UUID,
@@ -512,6 +670,16 @@ final class AppModel: ObservableObject {
                 }
                 content.primaryTranslationState = state
             }
+        }
+    }
+
+    private func applyParagraphTranslationState(
+        _ state: ParagraphOverlayTranslationState,
+        lookupID: UUID,
+        anchor: CGPoint
+    ) {
+        updateParagraphOverlayContent(for: lookupID, anchor: anchor) { content in
+            content.translationState = state
         }
     }
 
@@ -573,8 +741,24 @@ final class AppModel: ObservableObject {
         content.primaryTranslationState = .ready(fallback, isFallback: true)
     }
 
+    private func updateParagraphOverlayContent(
+        for lookupID: UUID,
+        anchor: CGPoint,
+        mutate: (inout ParagraphOverlayContent) -> Void
+    ) {
+        guard activeLookupID == lookupID,
+              case .paragraphResult(var content) = overlayState else {
+            return
+        }
+
+        let previousContent = content
+        mutate(&content)
+        guard content != previousContent else { return }
+        updateOverlay(state: .paragraphResult(content), anchor: anchor)
+    }
+
     func updateOverlay(state: OverlayState, anchor: CGPoint? = nil) {
-        guard isHotkeyActive || !settings.continuousTranslation else { return }
+        guard isHotkeyActive || activeLookupMode == .paragraph || !settings.continuousTranslation else { return }
 
         if let anchor {
             setOverlayAnchor(anchor)
@@ -585,7 +769,7 @@ final class AppModel: ObservableObject {
             sendNotification(title: "SnapTra Translator", body: message)
         case .idle:
             break
-        case .result:
+        case .result, .paragraphResult:
             if overlayState != state {
                 overlayState = state
             }
@@ -594,7 +778,7 @@ final class AppModel: ObservableObject {
             } else {
                 overlayWindowController.show(at: overlayAnchor)
             }
-            if !settings.continuousTranslation {
+            if activeLookupMode == .paragraph || !settings.continuousTranslation {
                 overlayWindowController.setInteractive(true)
             }
         default:
@@ -605,6 +789,9 @@ final class AppModel: ObservableObject {
                 scheduleOverlayLayoutRefresh()
             } else {
                 overlayWindowController.show(at: overlayAnchor)
+            }
+            if activeLookupMode == .paragraph {
+                overlayWindowController.setInteractive(true)
             }
         }
     }
@@ -670,7 +857,7 @@ final class AppModel: ObservableObject {
 
     private func handleScreenConfigurationChange() {
         captureService.invalidateCache()
-        guard isHotkeyActive else { return }
+        guard isHotkeyActive || activeLookupMode == .paragraph else { return }
         cancelActiveLookupWork()
         hideOverlay()
         debugOverlayWindowController.hide()
@@ -734,6 +921,13 @@ final class AppModel: ObservableObject {
         )
     }
 
+    private func resolveParagraphLanguagePair() -> LookupLanguagePair {
+        .fixed(
+            sourceIdentifier: "en",
+            targetIdentifier: settings.targetLanguage
+        )
+    }
+
     private func requiredLanguagePairsForCurrentSettings() -> [LookupLanguagePair] {
         [
             .fixed(
@@ -784,6 +978,15 @@ final class AppModel: ObservableObject {
         let x = (mouseLocation.x - rect.minX) / rect.width
         let y = (mouseLocation.y - rect.minY) / rect.height
         return CGPoint(x: x, y: y)
+    }
+
+    private func screenRect(for normalizedRect: CGRect, in captureRect: CGRect) -> CGRect {
+        CGRect(
+            x: captureRect.minX + normalizedRect.minX * captureRect.width,
+            y: captureRect.minY + normalizedRect.minY * captureRect.height,
+            width: normalizedRect.width * captureRect.width,
+            height: normalizedRect.height * captureRect.height
+        )
     }
 
     private static func lookupDictionarySection(
@@ -991,10 +1194,12 @@ final class AppModel: ObservableObject {
     }
 
     private func hideOverlay() {
+        activeLookupMode = .word
         cancelPendingOverlayLayoutRefresh()
         if overlayState != .idle {
             overlayState = .idle
         }
+        paragraphHighlightWindowController.hide()
         overlayWindowController.setInteractive(false)
         overlayWindowController.hide()
     }
