@@ -141,6 +141,10 @@ struct DictionarySource: Identifiable, Codable, Equatable {
     let type: SourceType
     var isEnabled: Bool
 
+    static func == (lhs: DictionarySource, rhs: DictionarySource) -> Bool {
+        lhs.id == rhs.id && lhs.name == rhs.name && lhs.type == rhs.type && lhs.isEnabled == rhs.isEnabled
+    }
+
     enum SourceType: String, Codable {
         case system    // macOS system dictionary
         case ecdict    // ECDICT offline dictionary
@@ -516,56 +520,141 @@ struct DictionarySettingsView: View {
 
 // MARK: - Reorderable VStack
 
-struct ReorderableVStack<Content: View, Item: Identifiable>: View {
+struct ReorderableVStack<Content: View, Item: Identifiable & Equatable>: View {
     @Binding var items: [Item]
     @ViewBuilder let content: (Binding<Item>, Int) -> Content
     let onMove: (IndexSet, Int) -> Void
     @State private var draggingItem: Item?
-    @State private var dragOffset: CGSize = .zero
     @State private var draggedIndex: Int?
+    @State private var targetIndex: Int?
+    @State private var itemFrames: [Int: CGRect] = [:]
 
     var body: some View {
-        VStack(spacing: 8) {
-            ForEach(Array($items.enumerated()), id: \.element.id) { index, item in
-                content(item, index)
-                    .contentShape(.rect)
-                    .overlay(
-                        Group {
-                            if draggedIndex == index {
-                                Color.clear
-                            }
+        ZStack {
+            VStack(spacing: 8) {
+                ForEach(Array($items.enumerated()), id: \.element.id) { index, item in
+                    ZStack(alignment: .top) {
+                        content(item, index)
+                            .opacity(draggedIndex == index ? 0.3 : 1)
+                            .background(
+                                GeometryReader { geo in
+                                    Color.clear
+                                        .preference(key: ItemFrameKey.self, value: [index: geo.frame(in: .named("reorderableContainer"))])
+                                }
+                            )
+
+                        // Insertion indicator above current item
+                        if let target = targetIndex, target == index, draggedIndex != index {
+                            Rectangle()
+                                .fill(Color.accentColor)
+                                .frame(height: 2)
+                                .shadow(color: Color.accentColor.opacity(0.5), radius: 2)
+                                .offset(y: -5)
                         }
-                    )
-                    .opacity(draggedIndex == index ? 0.3 : 1)
+
+                        // Insertion indicator at the end (after last item)
+                        if index == items.count - 1,
+                           let target = targetIndex,
+                           target == items.count,
+                           draggedIndex != items.count - 1 {
+                            Rectangle()
+                                .fill(Color.accentColor)
+                                .frame(height: 2)
+                                .shadow(color: Color.accentColor.opacity(0.5), radius: 2)
+                                .offset(y: geoHeight(for: index) - 3)
+                        }
+                    }
+                    .contentShape(.rect)
                     .gesture(
-                        DragGesture()
+                        DragGesture(minimumDistance: 5, coordinateSpace: .named("reorderableContainer"))
                             .onChanged { value in
                                 if draggedIndex == nil {
                                     draggedIndex = index
                                     draggingItem = items[index]
                                 }
-                                let itemHeight: CGFloat = 76
-                                let totalHeight = itemHeight * CGFloat(items.count)
-                                let offset = value.translation.height
-                                guard let currentIndex = draggedIndex else { return }
 
-                                let newIndex = min(max(0, currentIndex + Int(offset / itemHeight)), items.count - 1)
-                                if newIndex != currentIndex {
-                                    withAnimation(.spring(duration: 0.2)) {
-                                        let from = IndexSet([currentIndex])
-                                        onMove(from, newIndex > currentIndex ? newIndex + 1 : newIndex)
-                                        draggedIndex = newIndex
+                                // Calculate target index based on actual frame positions
+                                let target = calculateTargetIndex(at: value.location)
+                                if target != targetIndex {
+                                    withAnimation(.easeInOut(duration: 0.15)) {
+                                        targetIndex = target
                                     }
                                 }
                             }
                             .onEnded { _ in
-                                draggedIndex = nil
+                                if let from = draggedIndex, let to = targetIndex {
+                                    let actualTo = to > from ? to : to
+                                    if from != actualTo && from != actualTo - 1 {
+                                        withAnimation(.spring(duration: 0.3)) {
+                                            onMove(IndexSet([from]), actualTo)
+                                        }
+                                    }
+                                }
                                 draggingItem = nil
-                                dragOffset = .zero
+                                draggedIndex = nil
+                                targetIndex = nil
                             }
                     )
+                }
+            }
+            .coordinateSpace(name: "reorderableContainer")
+            .onPreferenceChange(ItemFrameKey.self) { frames in
+                itemFrames = frames
+            }
+
+            // Floating dragged item
+            if let draggedIndex = draggedIndex,
+               let item = draggingItem,
+               let frame = itemFrames[draggedIndex] {
+                content(Binding(
+                    get: { item },
+                    set: { _ in }
+                ), draggedIndex)
+                .position(x: frame.midX, y: frame.midY)
+                .scaleEffect(1.02)
+                .shadow(radius: 8)
+                .opacity(0.9)
+                .allowsHitTesting(false)
             }
         }
+    }
+
+    private func geoHeight(for index: Int) -> CGFloat {
+        itemFrames[index]?.height ?? 76
+    }
+
+    private func calculateTargetIndex(at point: CGPoint) -> Int {
+        guard !itemFrames.isEmpty else { return 0 }
+
+        let sortedFrames = itemFrames.sorted { $0.key < $1.key }
+
+        // Handle before first item
+        if let first = sortedFrames.first, point.y < first.value.midY {
+            return first.key
+        }
+
+        // Handle between items
+        for (i, frame) in sortedFrames {
+            guard let next = sortedFrames.first(where: { $0.key > i }) else { continue }
+            let midY = (frame.midY + next.value.midY) / 2
+            if point.y >= frame.midY && point.y < midY {
+                return next.key
+            }
+        }
+
+        // Handle after last item
+        if let last = sortedFrames.last {
+            return last.key + 1
+        }
+
+        return 0
+    }
+}
+
+struct ItemFrameKey: PreferenceKey {
+    static var defaultValue: [Int: CGRect] = [:]
+    static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) {
+        value.merge(nextValue()) { $1 }
     }
 }
 
