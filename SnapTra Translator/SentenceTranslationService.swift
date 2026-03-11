@@ -1,0 +1,742 @@
+//
+//  SentenceTranslationService.swift
+//  SnapTra Translator
+//
+//  Third-party sentence translation services.
+//
+
+import AppKit
+import CommonCrypto
+import Foundation
+import os.log
+import WebKit
+
+/// Service for translating sentences using third-party translation APIs.
+final class SentenceTranslationService {
+    private let session: URLSession
+    private let logger = Logger(subsystem: "com.yelog.SnapTra-Translator", category: "SentenceTranslation")
+
+    init(session: URLSession = SentenceTranslationService.makeSession()) {
+        self.session = session
+    }
+
+    /// Translate text using the specified provider.
+    func translate(
+        text: String,
+        provider: SentenceTranslationSource.SourceType,
+        sourceLanguage: String,
+        targetLanguage: String
+    ) async throws -> String? {
+        guard provider != .native else { return nil }
+
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty, sourceLanguage != targetLanguage else {
+            return nil
+        }
+
+        do {
+            switch provider {
+            case .google:
+                return try await translateGoogle(trimmedText, sourceLanguage: sourceLanguage, targetLanguage: targetLanguage)
+            case .bing:
+                return try await translateBing(trimmedText, sourceLanguage: sourceLanguage, targetLanguage: targetLanguage)
+            case .youdao:
+                return try await translateYoudao(trimmedText, sourceLanguage: sourceLanguage, targetLanguage: targetLanguage)
+            case .deepl:
+                return try await translateDeepL(trimmedText, sourceLanguage: sourceLanguage, targetLanguage: targetLanguage)
+            case .native:
+                return nil
+            }
+        } catch {
+            logger.error("Sentence translation failed for \(provider.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
+    }
+
+    // MARK: - Google Translate
+
+    private func translateGoogle(
+        _ text: String,
+        sourceLanguage: String,
+        targetLanguage: String
+    ) async throws -> String? {
+        guard let target = googleLanguageCode(for: targetLanguage) else { return nil }
+
+        var components = URLComponents(string: "https://translate.google.com/translate_a/single")
+        components?.queryItems = [
+            .init(name: "client", value: "gtx"),
+            .init(name: "sl", value: googleLanguageCode(for: sourceLanguage) ?? "auto"),
+            .init(name: "tl", value: target),
+            .init(name: "dt", value: "t"),
+            .init(name: "dj", value: "1"),
+            .init(name: "ie", value: "UTF-8"),
+            .init(name: "q", value: text),
+        ]
+
+        guard let url = components?.url else {
+            throw SentenceTranslationError.invalidRequest
+        }
+
+        var request = URLRequest(url: url)
+        request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue("https://translate.google.com/", forHTTPHeaderField: "Referer")
+
+        let data = try await performRequest(request)
+        let response = try JSONDecoder().decode(GoogleTranslateResponse.self, from: data)
+        let translation = response.sentences.compactMap(\.trans).joined()
+
+        guard !translation.isEmpty else { return nil }
+        return translation
+    }
+
+    // MARK: - DeepL Translate
+
+    private func translateDeepL(
+        _ text: String,
+        sourceLanguage: String,
+        targetLanguage: String
+    ) async throws -> String? {
+        guard let source = deepLPageLanguageCode(for: sourceLanguage),
+              let target = deepLPageLanguageCode(for: targetLanguage) else {
+            return nil
+        }
+
+        return try await DeepLWebViewSentenceTranslator.translate(
+            text: text,
+            sourceLanguage: source,
+            targetLanguage: target,
+            userAgent: Self.userAgent
+        )
+    }
+
+    // MARK: - Youdao Translate
+
+    private func translateYoudao(
+        _ text: String,
+        sourceLanguage: String,
+        targetLanguage: String
+    ) async throws -> String? {
+        guard let from = youdaoLanguageCode(for: sourceLanguage),
+              let to = youdaoLanguageCode(for: targetLanguage) else {
+            return nil
+        }
+
+        let keyData = try await fetchYoudaoKeyData()
+        let mysticTime = currentMilliseconds()
+        let sign = md5Hex("client=fanyideskweb&mysticTime=\(mysticTime)&product=webfanyi&key=\(keyData.secretKey)")
+        let form = percentEncodedForm([
+            "client": "fanyideskweb",
+            "product": "webfanyi",
+            "appVersion": "1.0.0",
+            "vendor": "web",
+            "pointParam": "client,mysticTime,product",
+            "keyfrom": "fanyi.web",
+            "i": text,
+            "from": from,
+            "to": to,
+            "dictResult": "false",
+            "keyid": "webfanyi",
+            "sign": sign,
+            "mysticTime": String(mysticTime),
+        ])
+
+        var request = URLRequest(url: URL(string: "https://dict.youdao.com/webtranslate")!)
+        request.httpMethod = "POST"
+        request.httpBody = form.data(using: .utf8)
+        request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue("https://fanyi.youdao.com/", forHTTPHeaderField: "Referer")
+        request.setValue("application/x-www-form-urlencoded; charset=UTF-8", forHTTPHeaderField: "Content-Type")
+
+        let encryptedData = try await performRequest(request)
+        guard let encryptedText = String(data: encryptedData, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+              !encryptedText.isEmpty else {
+            throw SentenceTranslationError.invalidResponse
+        }
+
+        let decryptedData = try decryptYoudaoPayload(
+            encryptedText,
+            aesKeySeed: keyData.aesKey,
+            aesIVSeed: keyData.aesIv
+        )
+        let response = try JSONDecoder().decode(YoudaoTranslationResponse.self, from: decryptedData)
+        let translation = response.translateResult
+            .flatMap { $0 }
+            .compactMap(\.tgt)
+            .joined()
+
+        guard !translation.isEmpty else { return nil }
+        return translation
+    }
+
+    private func fetchYoudaoKeyData() async throws -> YoudaoKeyData {
+        let mysticTime = currentMilliseconds()
+        let sign = md5Hex("client=fanyideskweb&mysticTime=\(mysticTime)&product=webfanyi&key=asdjnjfenknafdfsdfsd")
+        let query = percentEncodedForm([
+            "client": "fanyideskweb",
+            "product": "webfanyi",
+            "appVersion": "1.0.0",
+            "vendor": "web",
+            "pointParam": "client,mysticTime,product",
+            "keyfrom": "fanyi.web",
+            "keyid": "webfanyi-key-getter",
+            "sign": sign,
+            "mysticTime": String(mysticTime),
+        ])
+
+        guard let url = URL(string: "https://dict.youdao.com/webtranslate/key?\(query)") else {
+            throw SentenceTranslationError.invalidRequest
+        }
+
+        var request = URLRequest(url: url)
+        request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue("https://fanyi.youdao.com/", forHTTPHeaderField: "Referer")
+
+        let data = try await performRequest(request)
+        let response = try JSONDecoder().decode(YoudaoKeyResponse.self, from: data)
+        guard response.code == 0, let payload = response.data else {
+            throw SentenceTranslationError.invalidResponse
+        }
+        return payload
+    }
+
+    // MARK: - Bing Translate
+
+    private func translateBing(
+        _ text: String,
+        sourceLanguage: String,
+        targetLanguage: String
+    ) async throws -> String? {
+        guard let from = bingLanguageCode(for: sourceLanguage),
+              let to = bingLanguageCode(for: targetLanguage) else {
+            return nil
+        }
+
+        let tokenData = try await fetchBingTokenData()
+        let body = percentEncodedForm([
+            "text": text,
+            "fromLang": from,
+            "to": to,
+            "token": tokenData.token,
+            "key": tokenData.key,
+            "tryFetchingGenderDebiasedTranslations": "true",
+        ])
+
+        var components = URLComponents(string: "https://\(tokenData.host)/ttranslatev3")
+        components?.queryItems = [
+            .init(name: "isVertical", value: "1"),
+            .init(name: "IG", value: tokenData.ig),
+            .init(name: "IID", value: tokenData.iid),
+        ]
+
+        guard let url = components?.url else {
+            throw SentenceTranslationError.invalidRequest
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = body.data(using: .utf8)
+        request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.setValue("https://\(tokenData.host)/translator", forHTTPHeaderField: "Referer")
+        if let cookie = tokenData.cookieHeader {
+            request.setValue(cookie, forHTTPHeaderField: "Cookie")
+        }
+
+        let data = try await performRequest(request)
+        if let captcha = try? JSONDecoder().decode(BingCaptchaResponse.self, from: data),
+           captcha.showCaptcha {
+            throw SentenceTranslationError.captchaRequired
+        }
+
+        let translations = try JSONDecoder().decode([BingTranslationResponse].self, from: data)
+            .flatMap(\.translations)
+            .compactMap(\.text)
+            .joined(separator: " ")
+
+        guard !translations.isEmpty else { return nil }
+        return translations
+    }
+
+    private func fetchBingTokenData() async throws -> BingTokenData {
+        var request = URLRequest(url: URL(string: "https://www.bing.com/translator")!)
+        request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200..<300).contains(httpResponse.statusCode),
+              let html = String(data: data, encoding: .utf8) else {
+            throw SentenceTranslationError.invalidResponse
+        }
+
+        guard let ig = firstMatch(in: html, pattern: #"IG:\s*"([^"]+)""#, group: 1),
+              let iid = firstMatch(in: html, pattern: #"data-iid\s*=\s*"([^"]+)""#, group: 1),
+              let key = firstMatch(in: html, pattern: #"params_AbusePreventionHelper\s*=\s*\[(\d+),"[^"]+",\d+\]"#, group: 1),
+              let token = firstMatch(in: html, pattern: #"params_AbusePreventionHelper\s*=\s*\[\d+,"([^"]+)",\d+\]"#, group: 1) else {
+            throw SentenceTranslationError.invalidResponse
+        }
+
+        let cookieHeader = HTTPCookie.cookies(withResponseHeaderFields: httpResponse.allHeaderFields as? [String: String] ?? [:], for: request.url!)
+            .map { "\($0.name)=\($0.value)" }
+            .joined(separator: "; ")
+
+        return BingTokenData(
+            host: "www.bing.com",
+            ig: ig,
+            iid: iid,
+            key: key,
+            token: token,
+            cookieHeader: cookieHeader.isEmpty ? nil : cookieHeader
+        )
+    }
+
+    // MARK: - Helpers
+
+    private func performRequest(_ request: URLRequest) async throws -> Data {
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200..<300).contains(httpResponse.statusCode) else {
+            throw SentenceTranslationError.invalidResponse
+        }
+        return data
+    }
+
+    private func decryptYoudaoPayload(
+        _ payload: String,
+        aesKeySeed: String,
+        aesIVSeed: String
+    ) throws -> Data {
+        let paddedPayload = payload + String(repeating: "=", count: (4 - payload.count % 4) % 4)
+        guard let encrypted = Data(base64Encoded: paddedPayload.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")) else {
+            throw SentenceTranslationError.invalidResponse
+        }
+
+        let key = md5Data(aesKeySeed)
+        let iv = md5Data(aesIVSeed)
+        return try aes128CBCDecrypt(encrypted, key: key, iv: iv)
+    }
+
+    private func aes128CBCDecrypt(_ data: Data, key: Data, iv: Data) throws -> Data {
+        let outputLength = data.count + kCCBlockSizeAES128
+        var output = Data(count: outputLength)
+        var decryptedLength: size_t = 0
+
+        let status = output.withUnsafeMutableBytes { outputBytes in
+            data.withUnsafeBytes { dataBytes in
+                key.withUnsafeBytes { keyBytes in
+                    iv.withUnsafeBytes { ivBytes in
+                        CCCrypt(
+                            CCOperation(kCCDecrypt),
+                            CCAlgorithm(kCCAlgorithmAES),
+                            CCOptions(kCCOptionPKCS7Padding),
+                            keyBytes.baseAddress,
+                            key.count,
+                            ivBytes.baseAddress,
+                            dataBytes.baseAddress,
+                            data.count,
+                            outputBytes.baseAddress,
+                            outputLength,
+                            &decryptedLength
+                        )
+                    }
+                }
+            }
+        }
+
+        guard status == kCCSuccess else {
+            throw SentenceTranslationError.invalidResponse
+        }
+
+        output.removeSubrange(decryptedLength..<output.count)
+        return output
+    }
+
+    private func md5Hex(_ input: String) -> String {
+        md5Data(input).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private func md5Data(_ input: String) -> Data {
+        let source = Data(input.utf8)
+        var digest = [UInt8](repeating: 0, count: Int(CC_MD5_DIGEST_LENGTH))
+        source.withUnsafeBytes { buffer in
+            _ = CC_MD5(buffer.baseAddress, CC_LONG(source.count), &digest)
+        }
+        return Data(digest)
+    }
+
+    private func percentEncodedForm(_ parameters: [String: String]) -> String {
+        parameters
+            .map { key, value in
+                "\(percentEncode(key))=\(percentEncode(value))"
+            }
+            .sorted()
+            .joined(separator: "&")
+    }
+
+    private func percentEncode(_ value: String) -> String {
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._*")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed)?
+            .replacingOccurrences(of: " ", with: "+") ?? value
+    }
+
+    private func googleLanguageCode(for language: String) -> String? {
+        switch language {
+        case "zh", "zh-Hans":
+            return "zh-CN"
+        case "zh-Hant":
+            return "zh-TW"
+        default:
+            return localeLanguageIdentifier(for: language)
+        }
+    }
+
+    private func youdaoLanguageCode(for language: String) -> String? {
+        switch language {
+        case "zh", "zh-Hans":
+            return "zh-CHS"
+        case "zh-Hant":
+            return "zh-CHT"
+        default:
+            return localeLanguageIdentifier(for: language)?.lowercased()
+        }
+    }
+
+    private func bingLanguageCode(for language: String) -> String? {
+        switch language {
+        case "zh", "zh-Hans":
+            return "zh-Hans"
+        case "zh-Hant":
+            return "zh-Hant"
+        default:
+            return localeLanguageIdentifier(for: language)
+        }
+    }
+
+    private func deepLPageLanguageCode(for language: String) -> String? {
+        switch language {
+        case "auto", "und":
+            return "auto"
+        case "zh":
+            return "zh"
+        case "zh-Hans":
+            return "zh-Hans"
+        case "zh-Hant":
+            return "zh-Hant"
+        case "pt-BR":
+            return "pt-BR"
+        case "pt-PT", "pt":
+            return "pt-PT"
+        default:
+            return localeLanguageIdentifier(for: language)
+        }
+    }
+
+    private func localeLanguageIdentifier(for identifier: String) -> String? {
+        let locale = Locale(identifier: identifier)
+        return locale.language.languageCode?.identifier
+    }
+
+    private func currentMilliseconds() -> Int {
+        Int(Date().timeIntervalSince1970 * 1000)
+    }
+
+    private func firstMatch(in text: String, pattern: String, group: Int) -> String? {
+        regexGroups(in: text, pattern: pattern)?[safe: group]
+    }
+
+    private func regexGroups(in text: String, pattern: String) -> [String]? {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]) else {
+            return nil
+        }
+
+        let range = NSRange(text.startIndex..., in: text)
+        guard let match = regex.firstMatch(in: text, options: [], range: range) else {
+            return nil
+        }
+
+        return (0..<match.numberOfRanges).compactMap { index in
+            guard let range = Range(match.range(at: index), in: text) else { return nil }
+            return String(text[range])
+        }
+    }
+
+    private static func makeSession() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 30
+        configuration.timeoutIntervalForResource = 60
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        return URLSession(configuration: configuration)
+    }
+
+    private static let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+}
+
+// MARK: - Errors
+
+enum SentenceTranslationError: Error {
+    case invalidRequest
+    case invalidResponse
+    case captchaRequired
+}
+
+// MARK: - Response Models
+
+private struct GoogleTranslateResponse: Decodable {
+    let sentences: [Sentence]
+
+    struct Sentence: Decodable {
+        let trans: String?
+    }
+}
+
+private struct BingTokenData {
+    let host: String
+    let ig: String
+    let iid: String
+    let key: String
+    let token: String
+    let cookieHeader: String?
+}
+
+private struct BingCaptchaResponse: Decodable {
+    let showCaptcha: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case showCaptcha = "ShowCaptcha"
+    }
+}
+
+private struct BingTranslationResponse: Decodable {
+    let translations: [Translation]
+
+    struct Translation: Decodable {
+        let text: String?
+    }
+}
+
+private struct YoudaoKeyResponse: Decodable {
+    let data: YoudaoKeyData?
+    let code: Int
+}
+
+private struct YoudaoKeyData: Decodable {
+    let secretKey: String
+    let aesKey: String
+    let aesIv: String
+}
+
+private struct YoudaoTranslationResponse: Decodable {
+    let translateResult: [[TranslationItem]]
+
+    struct TranslationItem: Decodable {
+        let tgt: String?
+    }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        guard indices.contains(index) else { return nil }
+        return self[index]
+    }
+}
+
+// MARK: - DeepL WebView Translator
+
+@MainActor
+private final class DeepLWebViewSentenceTranslator: NSObject, WKNavigationDelegate {
+    private let webView: WKWebView
+    private let sourceLanguage: String
+    private let targetLanguage: String
+    private let text: String
+    private var navigationContinuation: CheckedContinuation<Void, Error>?
+
+    private init(
+        text: String,
+        sourceLanguage: String,
+        targetLanguage: String,
+        userAgent: String
+    ) {
+        self.text = text
+        self.sourceLanguage = sourceLanguage
+        self.targetLanguage = targetLanguage
+
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .nonPersistent()
+        configuration.defaultWebpagePreferences.allowsContentJavaScript = true
+
+        webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.customUserAgent = userAgent
+
+        super.init()
+        webView.navigationDelegate = self
+    }
+
+    static func translate(
+        text: String,
+        sourceLanguage: String,
+        targetLanguage: String,
+        userAgent: String
+    ) async throws -> String? {
+        let translator = DeepLWebViewSentenceTranslator(
+            text: text,
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage,
+            userAgent: userAgent
+        )
+        return try await translator.performTranslation()
+    }
+
+    private func performTranslation() async throws -> String? {
+        guard let url = makeTranslationURL() else {
+            throw SentenceTranslationError.invalidRequest
+        }
+
+        webView.load(URLRequest(url: url))
+        try await waitForNavigation()
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+        try await injectSourceText()
+
+        let deadline = Date().addingTimeInterval(15)
+        while Date() < deadline {
+            let state = try await readPageState()
+            if state.source == text, !state.target.isEmpty {
+                return state.target
+            }
+            try await Task.sleep(nanoseconds: 500_000_000)
+        }
+
+        return nil
+    }
+
+    private func makeTranslationURL() -> URL? {
+        guard let encodedText = text.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {
+            return nil
+        }
+
+        return URL(
+            string: "https://www.deepl.com/en/translator#\(sourceLanguage)/\(targetLanguage)/\(encodedText)"
+        )
+    }
+
+    private func waitForNavigation() async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            navigationContinuation = continuation
+        }
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        navigationContinuation?.resume()
+        navigationContinuation = nil
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        navigationContinuation?.resume(throwing: error)
+        navigationContinuation = nil
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        didFailProvisionalNavigation navigation: WKNavigation!,
+        withError error: Error
+    ) {
+        navigationContinuation?.resume(throwing: error)
+        navigationContinuation = nil
+    }
+
+    private func injectSourceText() async throws {
+        let script = """
+        (() => {
+          const textboxes = Array.from(document.querySelectorAll('[role="textbox"][data-content="true"]'));
+          const source = textboxes.find((element) => {
+            const label = element.getAttribute('aria-labelledby') || '';
+            return label.includes('source');
+          }) || textboxes.find((element) => element.getAttribute('contenteditable') === 'true');
+
+          if (!source) {
+            return JSON.stringify({ ok: false, reason: 'missing-source' });
+          }
+
+          const text = \(javaScriptLiteral(text));
+          source.focus();
+          source.textContent = text;
+
+          source.dispatchEvent(new InputEvent('beforeinput', {
+            bubbles: true,
+            cancelable: true,
+            inputType: 'insertText',
+            data: text
+          }));
+          source.dispatchEvent(new InputEvent('input', {
+            bubbles: true,
+            inputType: 'insertText',
+            data: text
+          }));
+          source.dispatchEvent(new Event('change', { bubbles: true }));
+
+          return JSON.stringify({
+            ok: true,
+            text: (source.innerText || source.textContent || '').trim()
+          });
+        })();
+        """
+
+        guard let payload = try await webView.evaluateJavaScript(script) as? String,
+              let data = payload.data(using: .utf8) else {
+            throw SentenceTranslationError.invalidResponse
+        }
+
+        let result = try JSONDecoder().decode(DeepLInjectionResult.self, from: data)
+        guard result.ok else {
+            throw SentenceTranslationError.invalidResponse
+        }
+    }
+
+    private func readPageState() async throws -> DeepLPageState {
+        let script = """
+        (() => {
+          const textboxes = Array.from(document.querySelectorAll('[role="textbox"][data-content="true"]'));
+          const source = textboxes.find((element) => {
+            const label = element.getAttribute('aria-labelledby') || '';
+            return label.includes('source');
+          }) || textboxes.find((element) => element.getAttribute('contenteditable') === 'true');
+          const target = textboxes.find((element) => {
+            const label = element.getAttribute('aria-labelledby') || '';
+            return label.includes('target');
+          }) || textboxes.find((element) => element !== source);
+
+          const normalize = (element) => {
+            if (!element) { return ''; }
+            return (element.innerText || element.textContent || element.value || '')
+              .replace(/\\u00a0/g, ' ')
+              .trim();
+          };
+
+          return JSON.stringify({
+            source: normalize(source),
+            target: normalize(target)
+          });
+        })();
+        """
+
+        guard let payload = try await webView.evaluateJavaScript(script) as? String,
+              let data = payload.data(using: .utf8) else {
+            throw SentenceTranslationError.invalidResponse
+        }
+
+        return try JSONDecoder().decode(DeepLPageState.self, from: data)
+    }
+
+    private func javaScriptLiteral(_ value: String) -> String {
+        let data = try? JSONEncoder().encode(value)
+        return String(data: data ?? Data("null".utf8), encoding: .utf8) ?? "null"
+    }
+}
+
+private struct DeepLPageState: Decodable {
+    let source: String
+    let target: String
+}
+
+private struct DeepLInjectionResult: Decodable {
+    let ok: Bool
+}

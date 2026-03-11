@@ -12,6 +12,7 @@ import Translation
 enum SettingsTab: String, CaseIterable {
     case general = "General"
     case dictionary = "Dictionary"
+    case sentence = "Sentence"
     case about = "About"
 }
 
@@ -22,8 +23,10 @@ extension Notification.Name {
 enum SettingsWindowLayout {
     static let defaultContentWidth: CGFloat = 370
     static let dictionaryContentWidth: CGFloat = 740
+    static let sentenceContentWidth: CGFloat = 740
     static let generalContentHeight: CGFloat = 590
     static let dictionaryContentHeight: CGFloat = 550
+    static let sentenceContentHeight: CGFloat = 550
     static let aboutContentHeight: CGFloat = 520
     static let outerPadding: CGFloat = 16
     static let animationDuration: TimeInterval = 0.24
@@ -32,6 +35,8 @@ enum SettingsWindowLayout {
         switch tab {
         case .dictionary:
             return dictionaryContentWidth
+        case .sentence:
+            return sentenceContentWidth
         default:
             return defaultContentWidth
         }
@@ -43,6 +48,8 @@ enum SettingsWindowLayout {
             return generalContentHeight
         case .dictionary:
             return dictionaryContentHeight
+        case .sentence:
+            return sentenceContentHeight
         case .about:
             return aboutContentHeight
         }
@@ -87,6 +94,14 @@ struct SettingsWindowView: View {
                     Label(L("Dictionary"), systemImage: "books.vertical")
                 }
                 .tag(SettingsTab.dictionary)
+
+            SentenceSettingsView(
+                hidesScrollIndicator: hidesTabScrollIndicator
+            )
+                .tabItem {
+                    Label(L("Sentence"), systemImage: "text.bubble")
+                }
+                .tag(SettingsTab.sentence)
 
             AboutSettingsView(
                 hidesScrollIndicator: hidesTabScrollIndicator

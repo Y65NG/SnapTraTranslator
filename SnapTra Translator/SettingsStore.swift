@@ -2,6 +2,66 @@ import AppKit
 import Combine
 import Foundation
 
+// MARK: - Sentence Translation Source
+
+struct SentenceTranslationSource: Identifiable, Codable, Equatable {
+    let id: UUID
+    let type: SourceType
+    var isEnabled: Bool
+
+    enum SourceType: String, Codable {
+        case native     // macOS Translation
+        case google
+        case bing
+        case youdao
+        case deepl
+    }
+
+    var displayName: String {
+        type.displayName
+    }
+
+    var subtitle: String {
+        type.subtitle
+    }
+
+    var isNative: Bool {
+        type == .native
+    }
+}
+
+extension SentenceTranslationSource.SourceType {
+    var displayName: String {
+        switch self {
+        case .native:
+            return String(localized: "Native Translation")
+        case .google:
+            return String(localized: "Google Translate")
+        case .bing:
+            return String(localized: "Bing Translate")
+        case .youdao:
+            return String(localized: "Youdao Translate")
+        case .deepl:
+            return String(localized: "DeepL Translate")
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .native:
+            return String(localized: "System Translation")
+        case .google:
+            return String(localized: "Google web translation")
+        case .bing:
+            return String(localized: "Bing web translation")
+        case .youdao:
+            return String(localized: "Youdao web translation")
+        case .deepl:
+            return String(localized: "DeepL web translation")
+        }
+    }
+}
+
 @MainActor
 final class SettingsStore: ObservableObject {
     @Published var playPronunciation: Bool {
@@ -30,6 +90,11 @@ final class SettingsStore: ObservableObject {
             saveDictionarySources()
         }
     }
+    @Published var sentenceTranslationSources: [SentenceTranslationSource] {
+        didSet {
+            saveSentenceTranslationSources()
+        }
+    }
     @Published var ttsProvider: TTSProvider {
         didSet { defaults.set(ttsProvider.rawValue, forKey: AppSettingKey.ttsProvider) }
     }
@@ -45,6 +110,7 @@ final class SettingsStore: ObservableObject {
 
     private let defaults: UserDefaults
     private static let dictionarySourcesKey = "dictionarySources"
+    private static let sentenceTranslationSourcesKey = "sentenceTranslationSources"
 
     init(defaults: UserDefaults = .standard, loginItemStatus: Bool? = nil) {
         self.defaults = defaults
@@ -66,7 +132,10 @@ final class SettingsStore: ObservableObject {
 
         // Load or migrate dictionary sources
         dictionarySources = Self.loadOrMigrateDictionarySources(defaults: defaults)
-        
+
+        // Load sentence translation sources
+        sentenceTranslationSources = Self.loadOrMigrateSentenceTranslationSources(defaults: defaults)
+
         // Load TTS provider (migrate removed "edge" → "bing")
         var ttsProviderValue = defaults.string(forKey: AppSettingKey.ttsProvider)
         if ttsProviderValue == "edge" { ttsProviderValue = "bing" }
@@ -199,5 +268,42 @@ final class SettingsStore: ObservableObject {
 
     private static var isECDICTInstalled: Bool {
         FileManager.default.fileExists(atPath: OfflineDictionaryService.databaseURL.path)
+    }
+
+    // MARK: - Sentence Translation Sources
+
+    private func saveSentenceTranslationSources() {
+        Self.persistSentenceTranslationSources(sentenceTranslationSources, defaults: defaults)
+    }
+
+    private static func loadOrMigrateSentenceTranslationSources(defaults: UserDefaults) -> [SentenceTranslationSource] {
+        // Try to load existing sources
+        if let data = defaults.data(forKey: sentenceTranslationSourcesKey),
+           let sources = try? JSONDecoder().decode([SentenceTranslationSource].self, from: data) {
+            return sources
+        }
+
+        let sources = defaultSentenceTranslationSources()
+        persistSentenceTranslationSources(sources, defaults: defaults)
+        return sources
+    }
+
+    private static func defaultSentenceTranslationSources() -> [SentenceTranslationSource] {
+        [
+            SentenceTranslationSource(id: UUID(), type: .native, isEnabled: true),
+            SentenceTranslationSource(id: UUID(), type: .google, isEnabled: false),
+            SentenceTranslationSource(id: UUID(), type: .bing, isEnabled: false),
+            SentenceTranslationSource(id: UUID(), type: .youdao, isEnabled: false),
+            SentenceTranslationSource(id: UUID(), type: .deepl, isEnabled: false),
+        ]
+    }
+
+    private static func persistSentenceTranslationSources(
+        _ sources: [SentenceTranslationSource],
+        defaults: UserDefaults
+    ) {
+        if let data = try? JSONEncoder().encode(sources) {
+            defaults.set(data, forKey: sentenceTranslationSourcesKey)
+        }
     }
 }

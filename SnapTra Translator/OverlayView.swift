@@ -204,6 +204,7 @@ struct OverlayView: View {
                         )
                     }
 
+                    // Native Translation Section (System Translation)
                     switch content.translationState {
                     case .loading:
                         paragraphSectionCard(
@@ -242,6 +243,13 @@ struct OverlayView: View {
                             paragraphErrorContent(message: message)
                         }
                     }
+
+                    // Third-party Service Results Section
+                    if !content.serviceResults.isEmpty {
+                        ForEach(content.serviceResults) { result in
+                            paragraphServiceResultCard(result: result)
+                        }
+                    }
                 } else if case .failed(let message) = content.translationState {
                     paragraphStatusCard(
                         title: nil,
@@ -249,6 +257,50 @@ struct OverlayView: View {
                         systemImage: "exclamationmark.circle"
                     )
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func paragraphServiceResultCard(result: ServiceTranslationResult) -> some View {
+        let title = "\(result.sourceType.displayName)"
+
+        switch result.state {
+        case .loading:
+            paragraphSectionCard(
+                title: title,
+                emphasis: false
+            ) {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text(L("Translating"))
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                    LoadingDotsView()
+                }
+            }
+
+        case .ready(let translatedText):
+            paragraphSectionCard(
+                title: title,
+                copyText: translatedText,
+                emphasis: false
+            ) {
+                paragraphTextContent(
+                    text: translatedText,
+                    font: .systemFont(ofSize: 15, weight: .medium),
+                    textColor: .labelColor,
+                    lineSpacing: 5
+                )
+            }
+
+        case .failed(let message):
+            paragraphSectionCard(
+                title: title,
+                emphasis: false
+            ) {
+                paragraphErrorContent(message: message)
             }
         }
     }

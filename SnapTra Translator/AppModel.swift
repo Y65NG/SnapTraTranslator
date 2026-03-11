@@ -80,12 +80,50 @@ enum OverlayDictionarySectionState: Equatable {
 struct ParagraphOverlayContent: Equatable {
     var originalText: String?
     var translationState: ParagraphOverlayTranslationState
+    var serviceResults: [ServiceTranslationResult]
+
+    init(
+        originalText: String? = nil,
+        translationState: ParagraphOverlayTranslationState,
+        serviceResults: [ServiceTranslationResult] = []
+    ) {
+        self.originalText = originalText
+        self.translationState = translationState
+        self.serviceResults = serviceResults
+    }
 }
 
 enum ParagraphOverlayTranslationState: Equatable {
     case loading
     case ready(String)
     case failed(String)
+}
+
+struct ServiceTranslationResult: Equatable, Identifiable {
+    let sourceType: SentenceTranslationSource.SourceType
+    var state: TranslationResultState
+
+    var id: String { sourceType.rawValue }
+
+    static func == (lhs: ServiceTranslationResult, rhs: ServiceTranslationResult) -> Bool {
+        lhs.sourceType == rhs.sourceType && lhs.state == rhs.state
+    }
+}
+
+enum TranslationResultState: Equatable {
+    case loading
+    case ready(String)
+    case failed(String)
+
+    var isLoading: Bool {
+        if case .loading = self { return true }
+        return false
+    }
+
+    var isReady: Bool {
+        if case .ready = self { return true }
+        return false
+    }
 }
 
 enum OverlayState: Equatable {
@@ -163,6 +201,7 @@ final class AppModel: ObservableObject {
     private let ocrService = OCRService()
     private let dictionaryService = DictionaryService()
     private let speechService = SpeechService()
+    private let sentenceTranslationService = SentenceTranslationService()
     let dictionaryDownload: DictionaryDownloadManager
     private var cancellables = Set<AnyCancellable>()
     private var lookupTask: Task<Void, Never>?
@@ -569,15 +608,39 @@ final class AppModel: ObservableObject {
                 let paragraphRect = screenRect(for: paragraph.boundingBox, in: capture.region.rect)
                 paragraphHighlightWindowController.show(at: paragraphRect)
 
+                // Get enabled third-party services for sentence translation
+                let enabledServices = settings.sentenceTranslationSources
+                    .filter { $0.isEnabled && !$0.isNative }
+
+                // Create initial service results with loading state
+                let initialServiceResults = enabledServices.map { source in
+                    ServiceTranslationResult(sourceType: source.type, state: .loading)
+                }
+
                 let initialContent = ParagraphOverlayContent(
                     originalText: paragraph.text,
-                    translationState: .loading
+                    translationState: .loading,
+                    serviceResults: initialServiceResults
                 )
                 updateOverlay(state: .paragraphResult(initialContent), anchor: mouseLocation)
 
                 let languagePair = resolveParagraphLanguagePair()
                 let sourceLanguage = languagePair.sourceLanguage
                 let targetLanguage = languagePair.targetLanguage
+
+                // Start third-party translations in parallel
+                Task {
+                    await performThirdPartyParagraphTranslations(
+                        text: paragraph.text,
+                        sourceLanguage: settings.sourceLanguage,
+                        targetLanguage: settings.targetLanguage,
+                        enabledServices: enabledServices,
+                        lookupID: lookupID,
+                        anchor: mouseLocation
+                    )
+                }
+
+                // Perform native translation
                 let translationState = await loadParagraphTranslationState(
                     text: paragraph.text,
                     languagePair: languagePair,
@@ -718,6 +781,50 @@ final class AppModel: ObservableObject {
     ) {
         updateParagraphOverlayContent(for: lookupID, anchor: anchor) { content in
             content.translationState = state
+        }
+    }
+
+    private func performThirdPartyParagraphTranslations(
+        text: String,
+        sourceLanguage: String,
+        targetLanguage: String,
+        enabledServices: [SentenceTranslationSource],
+        lookupID: UUID,
+        anchor: CGPoint
+    ) async {
+        guard !enabledServices.isEmpty else { return }
+
+        await withTaskGroup(of: (SentenceTranslationSource.SourceType, TranslationResultState).self) { group in
+            for service in enabledServices {
+                group.addTask {
+                    do {
+                        let result = try await self.sentenceTranslationService.translate(
+                            text: text,
+                            provider: service.type,
+                            sourceLanguage: sourceLanguage,
+                            targetLanguage: targetLanguage
+                        )
+
+                        if let translation = result, !translation.isEmpty {
+                            return (service.type, .ready(translation))
+                        } else {
+                            return (service.type, .failed(L("No translation result")))
+                        }
+                    } catch {
+                        return (service.type, .failed(L("Translation failed")))
+                    }
+                }
+            }
+
+            for await (sourceType, state) in group {
+                guard !Task.isCancelled, self.activeLookupID == lookupID else { return }
+
+                self.updateParagraphOverlayContent(for: lookupID, anchor: anchor) { content in
+                    if let index = content.serviceResults.firstIndex(where: { $0.sourceType == sourceType }) {
+                        content.serviceResults[index].state = state
+                    }
+                }
+            }
         }
     }
 
