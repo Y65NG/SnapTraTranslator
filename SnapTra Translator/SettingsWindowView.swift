@@ -23,7 +23,7 @@ extension Notification.Name {
 enum SettingsWindowLayout {
     static let defaultContentWidth: CGFloat = 470
     static let dictionaryContentWidth: CGFloat = 740
-    static let sentenceContentWidth: CGFloat = 740
+    static let sentenceContentWidth: CGFloat = 350
     static let generalContentHeight: CGFloat = 590
     static let dictionaryContentHeight: CGFloat = 550
     static let sentenceContentHeight: CGFloat = 550
