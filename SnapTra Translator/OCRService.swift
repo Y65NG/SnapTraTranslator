@@ -30,6 +30,17 @@ final class OCRService {
         return OCRService.groupParagraphs(from: lines)
     }
 
+    /// Returns both grouped English paragraphs and raw text lines for language detection
+    func recognizeParagraphsWithRawLines(in image: CGImage, language: String) async throws -> (
+        paragraphs: [RecognizedParagraph],
+        lines: [RecognizedTextLine]
+    ) {
+        let observations = try await recognizeObservations(in: image, language: language)
+        let lines = OCRService.extractLines(from: observations)
+        let paragraphs = OCRService.groupParagraphs(from: lines)
+        return (paragraphs, lines)
+    }
+
     private func recognizeObservations(
         in image: CGImage,
         language: String
@@ -194,6 +205,64 @@ final class OCRService {
             }
             .min(by: { lhs, rhs in lhs.1 < rhs.1 })?
             .0
+    }
+
+    /// Result type for paragraph selection with language detection
+    enum ParagraphSelectionResult {
+        /// Found an English paragraph at the cursor position
+        case english(RecognizedParagraph)
+        /// Cursor is on non-English content (Chinese, etc.)
+        case nonEnglish
+        /// No text found at cursor position
+        case noText
+    }
+
+    /// Selects paragraph with language-aware detection.
+    /// First checks if cursor is on any text (including Chinese), then determines if it's English.
+    nonisolated static func selectParagraphWithLanguageCheck(
+        from paragraphs: [RecognizedParagraph],
+        lines: [RecognizedTextLine],
+        normalizedPoint: CGPoint
+    ) -> ParagraphSelectionResult {
+        let tolerance: CGFloat = 0.01
+
+        // Phase 1: Check if cursor is on any text line (including non-English)
+        let containingLines = lines.filter { line in
+            line.boundingBox.insetBy(dx: -tolerance, dy: -tolerance).contains(normalizedPoint)
+        }
+
+        if !containingLines.isEmpty {
+            // Cursor is on some text - check if it's an English paragraph
+            if let englishParagraph = paragraphs.first(where: { paragraph in
+                paragraph.boundingBox.insetBy(dx: -tolerance, dy: -tolerance).contains(normalizedPoint)
+            }) {
+                // Cursor is on English paragraph
+                return .english(englishParagraph)
+            } else {
+                // Cursor is on non-English text (Chinese, etc.)
+                return .nonEnglish
+            }
+        }
+
+        // Phase 2: Cursor is not on any text - find nearest English paragraph with reduced search radius
+        let maxDistance: CGFloat = 0.08  // Reduced from 0.18 to avoid selecting distant paragraphs
+        let closestParagraph = paragraphs
+            .compactMap { paragraph -> (RecognizedParagraph, CGFloat)? in
+                let distance = hypot(
+                    paragraph.boundingBox.midX - normalizedPoint.x,
+                    paragraph.boundingBox.midY - normalizedPoint.y
+                )
+                guard distance <= maxDistance else { return nil }
+                return (paragraph, distance)
+            }
+            .min(by: { $0.1 < $1.1 })?
+            .0
+
+        if let paragraph = closestParagraph {
+            return .english(paragraph)
+        }
+
+        return .noText
     }
 
     // 只包含英语字母，数字和其他符号都作为分隔符

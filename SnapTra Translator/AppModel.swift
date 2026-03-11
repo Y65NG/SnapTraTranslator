@@ -533,13 +533,30 @@ final class AppModel: ObservableObject {
         let normalizedPoint = normalizedCursorPoint(mouseLocation, in: capture.region.rect)
 
         do {
-            let paragraphs = try await ocrService.recognizeParagraphs(
+            let (paragraphs, lines) = try await ocrService.recognizeParagraphsWithRawLines(
                 in: capture.image,
                 language: "en"
             )
             guard !Task.isCancelled, activeLookupID == lookupID else { return }
 
-            guard let paragraph = OCRService.selectParagraph(from: paragraphs, normalizedPoint: normalizedPoint) else {
+            let selectionResult = OCRService.selectParagraphWithLanguageCheck(
+                from: paragraphs,
+                lines: lines,
+                normalizedPoint: normalizedPoint
+            )
+
+            switch selectionResult {
+            case .nonEnglish:
+                // Cursor is on non-English content (Chinese, etc.)
+                paragraphHighlightWindowController.hide()
+                let content = ParagraphOverlayContent(
+                    originalText: nil,
+                    translationState: .failed(L("Non-English content detected. Paragraph translation only supports English."))
+                )
+                updateOverlay(state: .paragraphResult(content), anchor: mouseLocation)
+                return
+            case .noText:
+                // No text found near cursor
                 paragraphHighlightWindowController.hide()
                 let content = ParagraphOverlayContent(
                     originalText: nil,
@@ -547,33 +564,35 @@ final class AppModel: ObservableObject {
                 )
                 updateOverlay(state: .paragraphResult(content), anchor: mouseLocation)
                 return
+            case .english(let paragraph):
+                // Found English paragraph - continue with translation
+                let paragraphRect = screenRect(for: paragraph.boundingBox, in: capture.region.rect)
+                paragraphHighlightWindowController.show(at: paragraphRect)
+
+                let initialContent = ParagraphOverlayContent(
+                    originalText: paragraph.text,
+                    translationState: .loading
+                )
+                updateOverlay(state: .paragraphResult(initialContent), anchor: mouseLocation)
+
+                let languagePair = resolveParagraphLanguagePair()
+                let sourceLanguage = languagePair.sourceLanguage
+                let targetLanguage = languagePair.targetLanguage
+                let translationState = await loadParagraphTranslationState(
+                    text: paragraph.text,
+                    languagePair: languagePair,
+                    sourceLanguage: sourceLanguage,
+                    targetLanguage: targetLanguage,
+                    translationBridge: translationBridge
+                )
+
+                applyParagraphTranslationState(
+                    translationState,
+                    lookupID: lookupID,
+                    anchor: mouseLocation
+                )
+                return
             }
-
-            let paragraphRect = screenRect(for: paragraph.boundingBox, in: capture.region.rect)
-            paragraphHighlightWindowController.show(at: paragraphRect)
-
-            let initialContent = ParagraphOverlayContent(
-                originalText: paragraph.text,
-                translationState: .loading
-            )
-            updateOverlay(state: .paragraphResult(initialContent), anchor: mouseLocation)
-
-            let languagePair = resolveParagraphLanguagePair()
-            let sourceLanguage = languagePair.sourceLanguage
-            let targetLanguage = languagePair.targetLanguage
-            let translationState = await loadParagraphTranslationState(
-                text: paragraph.text,
-                languagePair: languagePair,
-                sourceLanguage: sourceLanguage,
-                targetLanguage: targetLanguage,
-                translationBridge: translationBridge
-            )
-
-            applyParagraphTranslationState(
-                translationState,
-                lookupID: lookupID,
-                anchor: mouseLocation
-            )
         } catch is CancellationError {
             paragraphHighlightWindowController.hide()
         } catch {
