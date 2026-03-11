@@ -528,6 +528,7 @@ struct ReorderableVStack<Content: View, Item: Identifiable & Equatable>: View {
     @State private var draggedIndex: Int?
     @State private var targetIndex: Int?
     @State private var itemFrames: [Int: CGRect] = [:]
+    @State private var dragPosition: CGPoint?
 
     var body: some View {
         ZStack {
@@ -571,7 +572,14 @@ struct ReorderableVStack<Content: View, Item: Identifiable & Equatable>: View {
                                 if draggedIndex == nil {
                                     draggedIndex = index
                                     draggingItem = items[index]
+                                    // Initialize drag position to item's center
+                                    if let frame = itemFrames[index] {
+                                        dragPosition = CGPoint(x: frame.midX, y: frame.midY)
+                                    }
                                 }
+
+                                // Update drag position to follow mouse
+                                dragPosition = value.location
 
                                 // Calculate target index based on actual frame positions
                                 let target = calculateTargetIndex(at: value.location)
@@ -593,6 +601,7 @@ struct ReorderableVStack<Content: View, Item: Identifiable & Equatable>: View {
                                 draggingItem = nil
                                 draggedIndex = nil
                                 targetIndex = nil
+                                dragPosition = nil
                             }
                     )
                 }
@@ -602,19 +611,26 @@ struct ReorderableVStack<Content: View, Item: Identifiable & Equatable>: View {
                 itemFrames = frames
             }
 
-            // Floating dragged item
+            // Floating dragged item that follows mouse
             if let draggedIndex = draggedIndex,
                let item = draggingItem,
+               let position = dragPosition,
                let frame = itemFrames[draggedIndex] {
                 content(Binding(
                     get: { item },
                     set: { _ in }
                 ), draggedIndex)
-                .position(x: frame.midX, y: frame.midY)
-                .scaleEffect(1.02)
-                .shadow(radius: 8)
-                .opacity(0.9)
+                .frame(width: frame.width, height: frame.height)
+                .position(x: position.x, y: position.y)
+                .scaleEffect(1.03)
+                .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 4)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(Color.accentColor.opacity(0.6), lineWidth: 2)
+                )
+                .opacity(0.95)
                 .allowsHitTesting(false)
+                .animation(.easeOut(duration: 0.05), value: position)
             }
         }
     }
