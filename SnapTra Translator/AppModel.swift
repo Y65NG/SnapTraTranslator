@@ -618,11 +618,22 @@ final class AppModel: ObservableObject {
                 )
                 paragraphHighlightWindowController.show(at: paragraphRect)
 
-                // 保存句子矩形，设置面板首选宽度
                 activeParagraphRect = paragraphRect
                 overlayPreferredWidth = max(320, paragraphRect.width)
 
-                // Get enabled third-party services for sentence translation
+                let languagePair = resolveParagraphLanguagePair()
+                let sourceLanguage = languagePair.sourceLanguage
+
+                if settings.playPronunciation {
+                    let languageCode = sourceLanguage.languageCode?.identifier
+                    speechService.speak(
+                        paragraph.text,
+                        language: languageCode,
+                        provider: settings.ttsProvider,
+                        useAmericanAccent: settings.englishAccent.isAmerican
+                    )
+                }
+
                 let enabledServices = settings.sentenceTranslationSources
                     .filter { $0.isEnabled && !$0.isNative }
 
@@ -639,8 +650,6 @@ final class AppModel: ObservableObject {
                 )
                 updateOverlay(state: .paragraphResult(initialContent), anchor: mouseLocation)
 
-                let languagePair = resolveParagraphLanguagePair()
-                let sourceLanguage = languagePair.sourceLanguage
                 let targetLanguage = languagePair.targetLanguage
 
                 // Start third-party translations in parallel
