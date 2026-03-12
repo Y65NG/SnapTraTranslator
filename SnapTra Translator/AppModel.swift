@@ -494,7 +494,7 @@ final class AppModel: ObservableObject {
                 speechService.speak(
                     selected.text,
                     language: languageCode,
-                    provider: settings.ttsProvider,
+                    provider: settings.wordTTSProvider,
                     useAmericanAccent: settings.englishAccent.isAmerican
                 )
             }
@@ -596,7 +596,7 @@ final class AppModel: ObservableObject {
                 paragraphHighlightWindowController.hide()
                 let content = ParagraphOverlayContent(
                     originalText: nil,
-                    translationState: .failed(L("Non-English content detected. Paragraph translation only supports English."))
+                    translationState: .failed("Non-English content detected. Paragraph translation only supports English.")
                 )
                 updateOverlay(state: .paragraphResult(content), anchor: mouseLocation)
                 return
@@ -605,7 +605,7 @@ final class AppModel: ObservableObject {
                 paragraphHighlightWindowController.hide()
                 let content = ParagraphOverlayContent(
                     originalText: nil,
-                    translationState: .failed(L("No English paragraph detected under cursor"))
+                    translationState: .failed("No English paragraph detected under cursor")
                 )
                 updateOverlay(state: .paragraphResult(content), anchor: mouseLocation)
                 return
@@ -624,12 +624,12 @@ final class AppModel: ObservableObject {
                 let languagePair = resolveParagraphLanguagePair()
                 let sourceLanguage = languagePair.sourceLanguage
 
-if settings.playSentencePronunciation {
+                if settings.playSentencePronunciation {
                     let languageCode = sourceLanguage.languageCode?.identifier
                     speechService.speak(
                         paragraph.text,
                         language: languageCode,
-                        provider: settings.ttsProvider,
+                        provider: settings.sentenceTTSProvider,
                         useAmericanAccent: settings.englishAccent.isAmerican
                     )
                 }
@@ -686,7 +686,7 @@ if settings.playSentencePronunciation {
             paragraphHighlightWindowController.hide()
             let content = ParagraphOverlayContent(
                 originalText: nil,
-                translationState: .failed(L("Translation failed: \(error.localizedDescription)"))
+                translationState: .failed("Translation failed: \(error.localizedDescription)")
             )
             updateOverlay(state: .paragraphResult(content), anchor: mouseLocation)
         }
@@ -729,12 +729,12 @@ if settings.playSentencePronunciation {
 
                 return translated.isEmpty ? .empty : .ready(translated, isFallback: false)
             } catch TranslationError.timeout {
-                return .failed(L("Translation timeout. Please try again."))
+                return .failed("Translation timeout. Please try again.")
             } catch {
-                return .failed(L("Translation failed: \(error.localizedDescription)"))
+                return .failed("Translation failed: \(error.localizedDescription)")
             }
         } else {
-            return .failed(L("Translation requires macOS 15"))
+            return .failed("Translation requires macOS 15")
         }
     }
 
@@ -790,14 +790,14 @@ if settings.playSentencePronunciation {
                     ).trimmingCharacters(in: .whitespacesAndNewlines)
                 }
 
-                return translatedText.isEmpty ? .failed(L("No translation result")) : .ready(translatedText)
+                return translatedText.isEmpty ? .failed("No translation result") : .ready(translatedText)
             } catch TranslationError.timeout {
-                return .failed(L("Translation timeout. Please try again."))
+                return .failed("Translation timeout. Please try again.")
             } catch {
-                return .failed(L("Translation failed: \(error.localizedDescription)"))
+                return .failed("Translation failed: \(error.localizedDescription)")
             }
         } else {
-            return .failed(L("Translation requires macOS 15"))
+            return .failed("Translation requires macOS 15")
         }
     }
 
