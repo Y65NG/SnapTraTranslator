@@ -199,13 +199,24 @@ struct OverlayView: View {
             paragraphTopBar()
 
             paragraphBodyContainer {
-                paragraphStatusCard(
-                    title: paragraphOriginalSectionTitle,
-                    message: L("Detecting text under cursor"),
-                    detail: L("正在执行全屏 OCR 与段落定位"),
-                    systemImage: "text.magnifyingglass",
-                    showsSpinner: true
-                )
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .center, spacing: 10) {
+                        ProgressView()
+                            .controlSize(.small)
+
+                        Text(L("Detecting text under cursor"))
+                            .font(.system(size: 15, weight: .medium, design: .rounded))
+                            .foregroundStyle(.primary)
+                    }
+
+                    Text(L("正在执行全屏 OCR 与段落定位"))
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 2)
+                .padding(.vertical, 14)
             }
         }
     }
@@ -218,25 +229,28 @@ struct OverlayView: View {
             paragraphBodyContainer {
                 if let originalText = content.originalText,
                    !originalText.isEmpty {
-                    paragraphSectionCard(
-                        title: paragraphOriginalSectionTitle,
-                        copyText: originalText
-                    ) {
+                    // Original text section (no card, no title)
+                    VStack(alignment: .leading, spacing: 0) {
                         paragraphTextContent(
                             text: originalText,
                             font: .systemFont(ofSize: 13, weight: .medium),
                             textColor: .labelColor,
                             preferredLineHeight: 20
                         )
+                        .padding(.horizontal, 18)
+                        .padding(.top, 2)
+                        .padding(.bottom, 14)
                     }
+
+                    // Divider after original text
+                    Divider()
+                        .padding(.horizontal, 18)
+                        .opacity(0.6)
 
                     // Native Translation Section (System Translation)
                     switch content.translationState {
                     case .loading:
-                        paragraphSectionCard(
-                            title: paragraphTranslationSectionTitle,
-                            emphasis: true
-                        ) {
+                        VStack(alignment: .leading, spacing: 0) {
                             HStack(spacing: 8) {
                                 ProgressView()
                                     .controlSize(.small)
@@ -245,14 +259,16 @@ struct OverlayView: View {
                                     .foregroundStyle(.secondary)
                                 LoadingDotsView()
                             }
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 14)
                         }
 
                     case .ready(let translatedText):
-                        paragraphSectionCard(
-                            title: paragraphTranslationSectionTitle,
-                            copyText: translatedText,
-                            emphasis: true
-                        ) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(paragraphTranslationSectionTitle)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.secondary)
+
                             paragraphTextContent(
                                 text: translatedText,
                                 font: .systemFont(ofSize: 13, weight: .semibold),
@@ -260,19 +276,24 @@ struct OverlayView: View {
                                 preferredLineHeight: 20
                             )
                         }
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 14)
 
                     case .failed(let message):
-                        paragraphSectionCard(
-                            title: paragraphTranslationSectionTitle,
-                            emphasis: true
-                        ) {
+                        VStack(alignment: .leading, spacing: 0) {
                             paragraphErrorContent(message: message)
+                                .padding(.horizontal, 18)
+                                .padding(.vertical, 14)
                         }
                     }
 
                     // Third-party Service Results Section
                     if !content.serviceResults.isEmpty {
                         ForEach(content.serviceResults) { result in
+                            Divider()
+                                .padding(.horizontal, 18)
+                                .opacity(0.6)
+
                             paragraphServiceResultCard(result: result)
                         }
                     }
@@ -293,10 +314,11 @@ struct OverlayView: View {
 
         switch result.state {
         case .loading:
-            paragraphSectionCard(
-                title: title,
-                emphasis: false
-            ) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+
                 HStack(spacing: 8) {
                     ProgressView()
                         .controlSize(.small)
@@ -306,13 +328,15 @@ struct OverlayView: View {
                     LoadingDotsView()
                 }
             }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
 
         case .ready(let translatedText):
-            paragraphSectionCard(
-                title: title,
-                copyText: translatedText,
-                emphasis: false
-            ) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+
                 paragraphTextContent(
                     text: translatedText,
                     font: .systemFont(ofSize: 13, weight: .medium),
@@ -320,14 +344,19 @@ struct OverlayView: View {
                     preferredLineHeight: 20
                 )
             }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
 
         case .failed(let message):
-            paragraphSectionCard(
-                title: title,
-                emphasis: false
-            ) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+
                 paragraphErrorContent(message: message)
             }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
         }
     }
 
@@ -352,11 +381,9 @@ struct OverlayView: View {
     private func paragraphBodyContent<Content: View>(
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 0) {
             content()
         }
-        .padding(.horizontal, 18)
-        .padding(.top, 2)
         .padding(.bottom, 16)
     }
 
@@ -1265,18 +1292,11 @@ private final class SelectableTextContainerView: NSView {
         textColor: NSColor,
         preferredLineHeight: CGFloat
     ) -> NSAttributedString {
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineBreakMode = .byWordWrapping
-        paragraphStyle.minimumLineHeight = preferredLineHeight
-        paragraphStyle.maximumLineHeight = preferredLineHeight
-
-        return NSAttributedString(
-            string: text,
-            attributes: [
-                .font: font,
-                .foregroundColor: textColor,
-                .paragraphStyle: paragraphStyle,
-            ]
+        ParagraphTextAttributedStringBuilder.build(
+            text: text,
+            font: font,
+            textColor: textColor,
+            preferredLineHeight: preferredLineHeight
         )
     }
 }

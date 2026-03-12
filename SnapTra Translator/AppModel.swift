@@ -651,7 +651,7 @@ final class AppModel: ObservableObject {
 
                 // Perform native translation
                 let translationState = await loadParagraphTranslationState(
-                    text: paragraph.text,
+                    paragraph: paragraph,
                     languagePair: languagePair,
                     sourceLanguage: sourceLanguage,
                     targetLanguage: targetLanguage,
@@ -724,14 +724,20 @@ final class AppModel: ObservableObject {
     }
 
     private func loadParagraphTranslationState(
-        text: String,
+        paragraph: RecognizedParagraph,
         languagePair: LookupLanguagePair,
         sourceLanguage: Locale.Language,
         targetLanguage: Locale.Language,
         translationBridge: TranslationBridge
     ) async -> ParagraphOverlayTranslationState {
+        let structure = ParagraphTextStructure.fromRecognizedLines(paragraph.lines)
+        let sourceText = {
+            let renderedText = structure.renderedText.trimmingCharacters(in: .whitespacesAndNewlines)
+            return renderedText.isEmpty ? paragraph.text : renderedText
+        }()
+
         if languagePair.isSameLanguage {
-            return .ready(text.replacingOccurrences(of: "\n", with: " "))
+            return .ready(sourceText)
         }
 
         if #available(macOS 15.0, *) {
@@ -741,13 +747,35 @@ final class AppModel: ObservableObject {
             }
 
             do {
-                let translated = try await translationBridge.translate(
-                    text: text.replacingOccurrences(of: "\n", with: " "),
-                    source: sourceLanguage,
-                    target: targetLanguage
-                ).trimmingCharacters(in: .whitespacesAndNewlines)
+                let translatedText: String
 
-                return translated.isEmpty ? .failed(L("No translation result")) : .ready(translated)
+                if !structure.translatableTexts.isEmpty {
+                    let translatedBlocks = try await translationBridge.translateBatch(
+                        texts: structure.translatableTexts,
+                        source: sourceLanguage,
+                        target: targetLanguage
+                    )
+
+                    if let rebuiltText = structure.applyingTranslations(translatedBlocks)?
+                        .trimmingCharacters(in: .whitespacesAndNewlines),
+                       !rebuiltText.isEmpty {
+                        translatedText = rebuiltText
+                    } else {
+                        translatedText = try await translationBridge.translate(
+                            text: sourceText,
+                            source: sourceLanguage,
+                            target: targetLanguage
+                        ).trimmingCharacters(in: .whitespacesAndNewlines)
+                    }
+                } else {
+                    translatedText = try await translationBridge.translate(
+                        text: sourceText,
+                        source: sourceLanguage,
+                        target: targetLanguage
+                    ).trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+
+                return translatedText.isEmpty ? .failed(L("No translation result")) : .ready(translatedText)
             } catch TranslationError.timeout {
                 return .failed(L("Translation timeout. Please try again."))
             } catch {

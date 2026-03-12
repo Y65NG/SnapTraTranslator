@@ -46,4 +46,36 @@ final class ParagraphOverlayLayoutTests: XCTestCase {
             accuracy: 0.001
         )
     }
+
+    func testAttributedBuilderUsesHangingIndentForListItems() throws {
+        let attributedText = ParagraphTextAttributedStringBuilder.build(
+            text: "• Unlimited multi-agent parallel execution",
+            font: .systemFont(ofSize: 13, weight: .medium),
+            textColor: .labelColor,
+            preferredLineHeight: 20
+        )
+
+        let style = try XCTUnwrap(
+            attributedText.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
+        )
+
+        XCTAssertEqual(style.firstLineHeadIndent, 0, accuracy: 0.001)
+        XCTAssertGreaterThan(style.headIndent, 0)
+    }
+
+    func testAttributedBuilderKeepsPlainParagraphZeroIndent() throws {
+        let attributedText = ParagraphTextAttributedStringBuilder.build(
+            text: "Visual interface combined with command-line power",
+            font: .systemFont(ofSize: 13, weight: .medium),
+            textColor: .labelColor,
+            preferredLineHeight: 20
+        )
+
+        let style = try XCTUnwrap(
+            attributedText.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
+        )
+
+        XCTAssertEqual(style.firstLineHeadIndent, 0, accuracy: 0.001)
+        XCTAssertEqual(style.headIndent, 0, accuracy: 0.001)
+    }
 }
