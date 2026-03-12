@@ -22,9 +22,9 @@ extension Notification.Name {
 
 enum SettingsWindowLayout {
     static let defaultContentWidth: CGFloat = 470
-    static let dictionaryContentWidth: CGFloat = 740
+    static let dictionaryContentWidth: CGFloat = 986
     static let sentenceContentWidth: CGFloat = 450
-    static let generalContentHeight: CGFloat = 590
+    static let generalContentHeight: CGFloat = 620
     static let dictionaryContentHeight: CGFloat = 550
     static let sentenceContentHeight: CGFloat = 580
     static let aboutContentHeight: CGFloat = 520
@@ -294,6 +294,16 @@ struct GeneralSettingsView: View {
                         .padding(.horizontal, 14)
                         .opacity(0.5)
 
+                    ToggleRow(
+                        title: L("Debug OCR Region"),
+                        subtitle: L("Show capture area when shortcut is pressed"),
+                        isOn: $model.settings.debugShowOcrRegion
+                    )
+
+                    Divider()
+                        .padding(.horizontal, 14)
+                        .opacity(0.5)
+
                     if #available(macOS 15.0, *) {
                         GeneralTranslationLanguageRow(
                             targetLanguage: $model.settings.targetLanguage,
@@ -369,9 +379,9 @@ struct GeneralSettingsView: View {
                         .opacity(0.5)
 
                     ToggleRow(
-                        title: L("Debug OCR Region"),
-                        subtitle: L("Show capture area when shortcut is pressed"),
-                        isOn: $model.settings.debugShowOcrRegion
+                        title: L("Enable Sentence Translation"),
+                        subtitle: L("Double-click %@ to translate the paragraph under cursor", model.settings.hotkeyDisplayText),
+                        isOn: $model.settings.sentenceTranslationEnabled
                     )
 
                     Divider()

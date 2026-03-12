@@ -11,10 +11,8 @@ import SwiftUI
 struct TTSServiceRow: View {
     let provider: TTSProvider
     let isWordSelected: Bool
-    let isSentenceSelected: Bool
     let latency: TTSLatencyTester.LatencyResult
     let onWordSelect: () -> Void
-    let onSentenceSelect: () -> Void
     
     var body: some View {
         HStack(spacing: 12) {
@@ -31,10 +29,7 @@ struct TTSServiceRow: View {
 
             Spacer()
 
-            HStack(spacing: 16) {
-                selectionButton(isSelected: isWordSelected, label: L("Word"), action: onWordSelect)
-                selectionButton(isSelected: isSentenceSelected, label: L("Sentence"), action: onSentenceSelect)
-            }
+            selectionButton(isSelected: isWordSelected, label: L("Word"), action: onWordSelect)
 
             latencyView
         }
@@ -247,10 +242,13 @@ enum DownloadState: Equatable {
 struct DictionarySettingsView: View {
     @EnvironmentObject var model: AppModel
     @State private var sources: [DictionarySource] = []
+    @State private var sentenceSources: [SentenceTranslationSource] = []
     @StateObject private var ttsTester = TTSLatencyTester()
     @StateObject private var dictionaryTester = DictionaryLatencyTester()
+    @StateObject private var sentenceLatencyTester = SentenceLatencyTester()
     @State private var hasTestedTTS = false
     @State private var hasTestedDictionaries = false
+    @State private var hasTestedSentence = false
     var hidesScrollIndicator: Bool = false
 
     var body: some View {
@@ -260,6 +258,9 @@ struct DictionarySettingsView: View {
                     .frame(maxWidth: .infinity)
 
                 ttsSection
+                    .frame(maxWidth: .infinity)
+
+                sentenceTranslationSection
                     .frame(maxWidth: .infinity)
             }
             .background(
@@ -271,6 +272,7 @@ struct DictionarySettingsView: View {
         .scrollIndicators(hidesScrollIndicator ? .hidden : .automatic, axes: .vertical)
         .onAppear {
             loadSources()
+            loadSentenceSources()
             if !hasTestedTTS {
                 hasTestedTTS = true
                 Task { await ttsTester.testAllProviders() }
@@ -278,6 +280,10 @@ struct DictionarySettingsView: View {
             if !hasTestedDictionaries {
                 hasTestedDictionaries = true
                 Task { await dictionaryTester.testAll() }
+            }
+            if !hasTestedSentence {
+                hasTestedSentence = true
+                Task { await sentenceLatencyTester.testAll() }
             }
         }
     }
@@ -366,10 +372,6 @@ struct DictionarySettingsView: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
                         .frame(width: 16)
-                    Text(L("Sentence"))
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 16)
                     Text(L("Latency"))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
@@ -382,10 +384,8 @@ struct DictionarySettingsView: View {
                     TTSServiceRow(
                         provider: provider,
                         isWordSelected: model.settings.wordTTSProvider == provider,
-                        isSentenceSelected: model.settings.sentenceTTSProvider == provider,
                         latency: ttsTester.latencies[provider] ?? .pending,
-                        onWordSelect: { model.settings.wordTTSProvider = provider },
-                        onSentenceSelect: { model.settings.sentenceTTSProvider = provider }
+                        onWordSelect: { model.settings.wordTTSProvider = provider }
                     )
                 }
             }
@@ -460,6 +460,60 @@ struct DictionarySettingsView: View {
                         .fill(.quaternary)
                 )
                 .disabled(ttsTester.isTesting)
+            }
+            .padding(.horizontal)
+            .padding(.bottom)
+        }
+    }
+
+    private var sentenceTranslationSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L("Sentence Translation"))
+                    .font(.headline)
+                Text(L("Drag to reorder service priority. Enabled services will be shown in the paragraph translation panel."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal)
+            .padding(.top)
+
+            ReorderableVStack(items: $sentenceSources, content: { source, index in
+                SentenceServiceRow(
+                    source: source,
+                    latency: sentenceLatencyTester.latencies[source.wrappedValue.type] ?? .pending,
+                    onToggle: { updateSentenceSources() }
+                )
+            }, onMove: moveSentenceSource)
+            .padding(.horizontal)
+
+            HStack {
+                Spacer()
+                Button {
+                    Task { await sentenceLatencyTester.testAll() }
+                } label: {
+                    HStack(spacing: 6) {
+                        if sentenceLatencyTester.isTesting {
+                            ProgressView()
+                                .controlSize(.small)
+                                .scaleEffect(0.7)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        Text(L("Refresh Latency"))
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .padding(.vertical, 6)
+                .padding(.horizontal, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(.quaternary)
+                )
+                .disabled(sentenceLatencyTester.isTesting)
             }
             .padding(.horizontal)
             .padding(.bottom)
@@ -541,13 +595,26 @@ struct DictionarySettingsView: View {
         sources = model.settings.dictionarySources
     }
 
+    private func loadSentenceSources() {
+        sentenceSources = model.settings.sentenceTranslationSources
+    }
+
     private func updateSources() {
         model.settings.dictionarySources = sources
+    }
+
+    private func updateSentenceSources() {
+        model.settings.sentenceTranslationSources = sentenceSources
     }
 
     private func moveSource(from indices: IndexSet, to offset: Int) {
         sources.move(fromOffsets: indices, toOffset: offset)
         updateSources()
+    }
+
+    private func moveSentenceSource(from indices: IndexSet, to offset: Int) {
+        sentenceSources.move(fromOffsets: indices, toOffset: offset)
+        updateSentenceSources()
     }
 }
 
