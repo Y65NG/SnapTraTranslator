@@ -171,17 +171,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         pronunciationItem.target = self
         menu.addItem(pronunciationItem)
         self.pronunciationMenuItem = pronunciationItem
-        
-        // Continuous translation toggle
-        let continuousItem = NSMenuItem(
-            title: L("Continuous Translation"),
-            action: #selector(toggleContinuousTranslation),
-            keyEquivalent: ""
-        )
-        continuousItem.target = self
-        menu.addItem(continuousItem)
-        self.continuousTranslationMenuItem = continuousItem
-        
+
         // Provider info (read-only, shows current TTS provider)
         let providerItem = NSMenuItem(
             title: "",
@@ -192,8 +182,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         providerItem.indentationLevel = 1
         menu.addItem(providerItem)
         self.providerInfoMenuItem = providerItem
-        
+
         menu.addItem(.separator())
+
+        // Continuous translation toggle
+        let continuousItem = NSMenuItem(
+            title: L("Continuous Translation"),
+            action: #selector(toggleContinuousTranslation),
+            keyEquivalent: ""
+        )
+        continuousItem.target = self
+        menu.addItem(continuousItem)
+        self.continuousTranslationMenuItem = continuousItem
         
         // Actions section
         // Settings
