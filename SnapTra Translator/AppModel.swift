@@ -1407,6 +1407,7 @@ final class AppModel: ObservableObject {
         activeLookupMode = .word
         stopParagraphEscapeMonitoring()
         cancelPendingOverlayLayoutRefresh()
+        speechService.stopSpeaking()
         if overlayState != .idle {
             overlayState = .idle
         }
