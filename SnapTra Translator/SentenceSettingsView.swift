@@ -131,8 +131,15 @@ struct SentenceServiceRow: View {
 
                 // Name and description - use L() for real-time localization
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(localizedDisplayName)
-                        .font(.system(size: 13, weight: .medium))
+                    HStack(spacing: 8) {
+                        Text(localizedDisplayName)
+                            .font(.system(size: 13, weight: .medium))
+
+                        // Latency indicator (for non-native sources)
+                        if !source.isNative {
+                            latencyView
+                        }
+                    }
                     Text(localizedSubtitle)
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
@@ -152,19 +159,6 @@ struct SentenceServiceRow: View {
             }
             .padding(.vertical, 8)
             .contentShape(Rectangle())
-
-            // Bottom: Latency indicator (for non-native sources)
-            if !source.isNative {
-                Divider()
-                    .padding(.vertical, 8)
-                    .padding(.leading, 52)
-
-                HStack {
-                    Spacer()
-                    latencyView
-                }
-                .padding(.leading, 52)
-            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)

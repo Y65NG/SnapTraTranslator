@@ -742,8 +742,15 @@ struct IntegratedDictionaryRow: View {
 
                 // Name and description
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(source.displayName)
-                        .font(.system(size: 13, weight: .medium))
+                    HStack(spacing: 8) {
+                        Text(source.displayName)
+                            .font(.system(size: 13, weight: .medium))
+
+                        // Latency indicator (for online sources)
+                        if source.type.isOnline {
+                            latencyView
+                        }
+                    }
                     Text(source.type.subtitle)
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
@@ -772,19 +779,6 @@ struct IntegratedDictionaryRow: View {
 
                 downloadManagementBar
                     .padding(.leading, 52) // Align with content
-            }
-
-            // Bottom: Latency indicator (for online sources)
-            if source.type.isOnline {
-                Divider()
-                    .padding(.vertical, 8)
-                    .padding(.leading, 52) // Align with content
-
-                HStack {
-                    Spacer()
-                    latencyView
-                }
-                .padding(.leading, 52) // Align with content
             }
         }
         .padding(.horizontal, 12)
