@@ -507,7 +507,7 @@ struct OverlayView: View {
     }
 
     private var paragraphTranslationSectionTitle: String {
-        paragraphLanguageSectionTitle(for: model.settings.targetLanguage)
+        SentenceTranslationSource.SourceType.native.displayName
     }
 
     private func paragraphLanguageSectionTitle(for languageIdentifier: String) -> String {
