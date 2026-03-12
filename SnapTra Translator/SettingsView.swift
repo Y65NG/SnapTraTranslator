@@ -372,7 +372,7 @@ struct PermissionRow: View {
                     .foregroundStyle(.primary)
             }
             Spacer()
-            Text(isGranted ? "Granted" : "Not granted")
+            Text(isGranted ? L("Granted") : L("Not granted"))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(isGranted ? .green : .secondary)
                 .padding(.horizontal, 8)
@@ -404,10 +404,10 @@ struct ECDICTDictionaryRow: View {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 6) {
-                        Text("Advanced English Dictionary")
+                        Text(L("Advanced English Dictionary"))
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(.primary)
-                        Text("Powered by ECDICT")
+                        Text(L("Powered by ECDICT"))
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 6)
@@ -421,14 +421,14 @@ struct ECDICTDictionaryRow: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("Used first for English word lookups. Translation still uses Apple Translation.")
+                    Text(L("Used first for English word lookups. Translation still uses Apple Translation."))
                         .font(.system(size: 11))
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 6) {
-                        DictionaryBenefitPill(title: "Fuller definitions")
-                        DictionaryBenefitPill(title: "Tech terms")
-                        DictionaryBenefitPill(title: "Works offline")
+                        DictionaryBenefitPill(title: L("Fuller definitions"))
+                        DictionaryBenefitPill(title: L("Tech terms"))
+                        DictionaryBenefitPill(title: L("Works offline"))
                     }
                 }
                 Spacer()
@@ -444,7 +444,7 @@ struct ECDICTDictionaryRow: View {
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Button("Cancel") { manager.cancelDownload() }
+                        Button(L("Cancel")) { manager.cancelDownload() }
                             .font(.system(size: 11))
                             .buttonStyle(.plain)
                             .foregroundStyle(.secondary)
@@ -459,12 +459,12 @@ struct ECDICTDictionaryRow: View {
                         .foregroundStyle(.orange)
                         .fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 8) {
-                        Button("Retry") { manager.retry() }
+                        Button(L("Retry")) { manager.retry() }
                             .font(.system(size: 11, weight: .medium))
                             .buttonStyle(.borderedProminent)
                             .controlSize(.small)
 
-                        Button("Choose file…") { manager.selectManually() }
+                        Button(L("Choose file…")) { manager.selectManually() }
                             .font(.system(size: 11, weight: .medium))
                             .buttonStyle(.bordered)
                             .controlSize(.small)
@@ -496,7 +496,7 @@ struct ECDICTDictionaryRow: View {
     private var actionView: some View {
         switch manager.state {
         case .notInstalled:
-            Button("Install") { manager.startDownload() }
+            Button(L("Install")) { manager.startDownload() }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
 
@@ -508,14 +508,14 @@ struct ECDICTDictionaryRow: View {
                 ProgressView()
                     .scaleEffect(0.7)
                     .controlSize(.small)
-                Text("Installing")
+                Text(L("Installing"))
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
 
         case .installed:
             HStack(spacing: 8) {
-                Text("Enabled")
+                Text(L("Enabled"))
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.green)
                     .padding(.horizontal, 8)
@@ -524,7 +524,7 @@ struct ECDICTDictionaryRow: View {
                         Capsule()
                             .fill(Color.green.opacity(0.12))
                     )
-                Button("Remove") { manager.delete() }
+                Button(L("Remove")) { manager.delete() }
                     .font(.system(size: 11, weight: .medium))
                     .buttonStyle(.bordered)
                     .controlSize(.small)
@@ -537,7 +537,7 @@ struct ECDICTDictionaryRow: View {
 }
 
 private struct DictionaryBenefitPill: View {
-    let title: LocalizedStringKey
+    let title: String
 
     var body: some View {
         Text(title)

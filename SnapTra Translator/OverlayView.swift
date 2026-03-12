@@ -166,7 +166,7 @@ struct OverlayView: View {
                 ProgressView()
                     .controlSize(.small)
                     .scaleEffect(0.85)
-                Text("Translating")
+                Text(L("Translating"))
                     .font(.system(size: 13, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
                 LoadingDotsView()
@@ -209,7 +209,7 @@ struct OverlayView: View {
                             .foregroundStyle(.primary)
                     }
 
-                    Text(L("正在执行全屏 OCR 与段落定位"))
+                    Text(L("Running full-screen OCR and paragraph matching"))
                         .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1062,7 +1062,7 @@ struct OverlayView: View {
             Image(systemName: "text.magnifyingglass")
                 .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(.secondary)
-            Text("No word detected")
+            Text(L("No word detected"))
                 .font(.system(size: 14, weight: .medium, design: .rounded))
                 .foregroundStyle(.primary.opacity(0.8))
         }

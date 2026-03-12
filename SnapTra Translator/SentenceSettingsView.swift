@@ -113,6 +113,7 @@ struct SentenceServiceRow: View {
     @Binding var source: SentenceTranslationSource
     var latency: SentenceLatencyTester.LatencyResult
     var onToggle: () -> Void
+    @StateObject private var localizationManager = LocalizationManager.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -128,14 +129,15 @@ struct SentenceServiceRow: View {
                 iconView
                     .frame(width: 24)
 
-                // Name and description
+                // Name and description - use L() for real-time localization
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(source.displayName)
+                    Text(localizedDisplayName)
                         .font(.system(size: 13, weight: .medium))
-                    Text(source.type.subtitle)
+                    Text(localizedSubtitle)
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }
+                .id("lang-\(localizationManager.currentLanguage.rawValue)-\(source.type.rawValue)")
 
                 Spacer()
 
@@ -260,6 +262,38 @@ struct SentenceServiceRow: View {
             return String(format: "%.0f ms", ms)
         } else {
             return String(format: "%.1f s", ms / 1000)
+        }
+    }
+
+    // Localized display name that responds to language changes
+    private var localizedDisplayName: String {
+        switch source.type {
+        case .native:
+            return L("Native Translation")
+        case .google:
+            return L("Google Translate")
+        case .bing:
+            return L("Bing Translate")
+        case .youdao:
+            return L("Youdao Translate")
+        case .deepl:
+            return L("DeepL Translate")
+        }
+    }
+
+    // Localized subtitle that responds to language changes
+    private var localizedSubtitle: String {
+        switch source.type {
+        case .native:
+            return L("System Translation")
+        case .google:
+            return L("Google web translation")
+        case .bing:
+            return L("Bing web translation")
+        case .youdao:
+            return L("Youdao web translation")
+        case .deepl:
+            return L("DeepL web translation")
         }
     }
 }
