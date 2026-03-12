@@ -209,7 +209,7 @@ struct OverlayView: View {
                             .foregroundStyle(.primary)
                     }
 
-                    Text(L("Running full-screen OCR and paragraph matching"))
+                    Text(L("正在执行全屏 OCR 与段落定位"))
                         .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -298,11 +298,20 @@ struct OverlayView: View {
                         }
                     }
                 } else if case .failed(let message) = content.translationState {
-                    paragraphStatusCard(
-                        title: nil,
-                        message: message,
-                        systemImage: "exclamationmark.circle"
-                    )
+                    // No card styling for error message - display inline
+                    HStack(alignment: .center, spacing: 10) {
+                        Image(systemName: "exclamationmark.circle")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.secondary)
+
+                        Text(message)
+                            .font(.system(size: 15, weight: .medium, design: .rounded))
+                            .foregroundStyle(.primary)
+
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 18)
                 }
             }
         }

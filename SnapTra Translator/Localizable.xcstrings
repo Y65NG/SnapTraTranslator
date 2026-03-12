@@ -6411,6 +6411,47 @@
         }
       }
     },
+    "No English paragraph detected under cursor" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No English paragraph detected under cursor"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se detectó párrafo en inglés bajo el cursor"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "カーソル下に英語の段落が検出されませんでした"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "커서 아래에 영어 문단이 감지되지 않음"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "光标下未检测到英文段落"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未在游標下偵測到英文段落"
+          }
+        }
+      }
+    },
     "识别鼠标所在英文段落中" : {
       "extractionState" : "stale",
       "localizations" : {
