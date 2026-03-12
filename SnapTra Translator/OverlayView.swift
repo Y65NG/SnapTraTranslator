@@ -2,13 +2,25 @@ import AppKit
 import SwiftUI
 
 struct OverlayView: View {
+    let paragraphOverlayMaxHeightOverride: CGFloat?
+    let paragraphOverlayScrollingEnabledOverride: Bool?
+
     @EnvironmentObject var model: AppModel
     @Environment(\.colorScheme) private var colorScheme
     @State private var isParagraphHeaderHovered = false
     @State private var isParagraphHeaderDragging = false
     private let wordOverlayWidth: CGFloat = 380
     private let paragraphOverlayWidth: CGFloat = 520
+    private let paragraphHeaderHeight: CGFloat = 34
     private let compactSectionMinHeight: CGFloat = 28
+
+    init(
+        paragraphOverlayMaxHeightOverride: CGFloat? = nil,
+        paragraphOverlayScrollingEnabledOverride: Bool? = nil
+    ) {
+        self.paragraphOverlayMaxHeightOverride = paragraphOverlayMaxHeightOverride
+        self.paragraphOverlayScrollingEnabledOverride = paragraphOverlayScrollingEnabledOverride
+    }
 
     private var overlayWidth: CGFloat {
         if let preferred = model.overlayPreferredWidth {
@@ -43,6 +55,18 @@ struct OverlayView: View {
     private var isVisible: Bool {
         if case .idle = model.overlayState { return false }
         return true
+    }
+
+    private var paragraphBodyMaxHeight: CGFloat? {
+        guard isParagraphOverlayMode,
+              let overlayMaxHeight = paragraphOverlayMaxHeightOverride else {
+            return nil
+        }
+        return max(1, overlayMaxHeight - paragraphHeaderHeight)
+    }
+
+    private var paragraphBodyUsesScrollView: Bool {
+        paragraphOverlayScrollingEnabledOverride ?? false
     }
 
     var body: some View {
@@ -311,15 +335,29 @@ struct OverlayView: View {
     private func paragraphBodyContainer<Content: View>(
         @ViewBuilder content: () -> Content
     ) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                content()
+        Group {
+            if paragraphBodyUsesScrollView {
+                ScrollView {
+                    paragraphBodyContent(content: content)
+                }
+                .frame(maxHeight: paragraphBodyMaxHeight)
+            } else {
+                paragraphBodyContent(content: content)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 2)
-            .padding(.bottom, 16)
         }
-        .frame(maxHeight: 360)
+    }
+
+    @ViewBuilder
+    private func paragraphBodyContent<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            content()
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 2)
+        .padding(.bottom, 16)
     }
 
     @ViewBuilder
@@ -1078,8 +1116,128 @@ private struct SelectableTextView: NSViewRepresentable {
     let textColor: NSColor
     let preferredLineHeight: CGFloat
 
-    func makeNSView(context: Context) -> NSTextView {
-        let textView = NSTextView(frame: .zero)
+    func makeNSView(context: Context) -> SelectableTextContainerView {
+        let textView = SelectableTextContainerView(frame: .zero)
+        textView.update(
+            text: text,
+            font: font,
+            textColor: textColor,
+            preferredLineHeight: preferredLineHeight
+        )
+        return textView
+    }
+
+    func updateNSView(_ textView: SelectableTextContainerView, context: Context) {
+        textView.update(
+            text: text,
+            font: font,
+            textColor: textColor,
+            preferredLineHeight: preferredLineHeight
+        )
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: SelectableTextContainerView, context: Context) -> CGSize? {
+        guard let width = proposal.width, width > 0 else {
+            return CGSize(width: 0, height: font.pointSize)
+        }
+
+        return nsView.measuredSize(forWidth: width)
+    }
+}
+
+private final class SelectableTextContainerView: NSView {
+    private let textView: NSTextView
+    private var cachedMeasurement: (width: CGFloat, height: CGFloat)?
+
+    override var isFlipped: Bool { true }
+
+    override init(frame frameRect: NSRect) {
+        textView = NSTextView(frame: .zero)
+        super.init(frame: frameRect)
+        configureTextView()
+        addSubview(textView)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func update(
+        text: String,
+        font: NSFont,
+        textColor: NSColor,
+        preferredLineHeight: CGFloat
+    ) {
+        textView.font = font
+        textView.textColor = textColor
+        textView.textStorage?.setAttributedString(
+            makeAttributedString(
+                text: text,
+                font: font,
+                textColor: textColor,
+                preferredLineHeight: preferredLineHeight
+            )
+        )
+        cachedMeasurement = nil
+        invalidateIntrinsicContentSize()
+        needsLayout = true
+    }
+
+    func measuredSize(forWidth width: CGFloat) -> CGSize {
+        let resolvedWidth = max(1, ceil(width))
+        let height = measuredHeight(forWidth: resolvedWidth)
+        return CGSize(width: resolvedWidth, height: height)
+    }
+
+    override var intrinsicContentSize: CGSize {
+        let width = bounds.width > 0 ? bounds.width : cachedMeasurement?.width ?? 0
+        guard width > 0 else {
+            return CGSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric)
+        }
+        return CGSize(width: NSView.noIntrinsicMetric, height: measuredHeight(forWidth: width))
+    }
+
+    override func layout() {
+        super.layout()
+
+        let width = bounds.width > 0 ? bounds.width : cachedMeasurement?.width ?? 0
+        guard width > 0 else { return }
+
+        let height = measuredHeight(forWidth: width)
+        let targetFrame = CGRect(x: 0, y: 0, width: width, height: height)
+        if textView.frame != targetFrame {
+            textView.frame = targetFrame
+        }
+    }
+
+    private func measuredHeight(forWidth width: CGFloat) -> CGFloat {
+        if let cachedMeasurement,
+           abs(cachedMeasurement.width - width) <= 0.5 {
+            return cachedMeasurement.height
+        }
+
+        guard let textContainer = textView.textContainer,
+              let layoutManager = textView.layoutManager else {
+            return 0
+        }
+
+        textContainer.containerSize = CGSize(
+            width: width,
+            height: CGFloat.greatestFiniteMagnitude
+        )
+        layoutManager.ensureLayout(for: textContainer)
+
+        let usedRect = layoutManager.usedRect(for: textContainer)
+        let minimumHeight = ceil((textView.font?.ascender ?? 0) - (textView.font?.descender ?? 0))
+        let textHeight = ceil(usedRect.height) + textView.textContainerInset.height * 2
+        let resolvedHeight = max(minimumHeight, textHeight)
+
+        cachedMeasurement = (width, resolvedHeight)
+        return resolvedHeight
+    }
+
+    private func configureTextView() {
         textView.isEditable = false
         textView.isSelectable = true
         textView.isRichText = false
@@ -1088,41 +1246,25 @@ private struct SelectableTextView: NSViewRepresentable {
         textView.focusRingType = .none
         textView.textContainerInset = .zero
         textView.isHorizontallyResizable = false
-        textView.isVerticallyResizable = true
-        textView.autoresizingMask = [.width]
+        textView.isVerticallyResizable = false
+        textView.minSize = .zero
+        textView.maxSize = CGSize(
+            width: CGFloat.greatestFiniteMagnitude,
+            height: CGFloat.greatestFiniteMagnitude
+        )
+        textView.autoresizingMask = []
         textView.textContainer?.lineFragmentPadding = 0
-        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.widthTracksTextView = false
+        textView.textContainer?.heightTracksTextView = false
         textView.textContainer?.lineBreakMode = .byWordWrapping
-        return textView
     }
 
-    func updateNSView(_ textView: NSTextView, context: Context) {
-        textView.textStorage?.setAttributedString(makeAttributedString())
-
-        let currentWidth = max(textView.bounds.width, 1)
-        textView.textContainer?.containerSize = CGSize(
-            width: currentWidth,
-            height: .greatestFiniteMagnitude
-        )
-    }
-
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSTextView, context: Context) -> CGSize? {
-        guard let width = proposal.width, width > 0 else {
-            return CGSize(width: 0, height: font.pointSize)
-        }
-
-        let rect = makeAttributedString().boundingRect(
-            with: CGSize(width: width, height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading]
-        )
-
-        return CGSize(
-            width: width,
-            height: max(ceil(rect.height), ceil(font.ascender - font.descender))
-        )
-    }
-
-    private func makeAttributedString() -> NSAttributedString {
+    private func makeAttributedString(
+        text: String,
+        font: NSFont,
+        textColor: NSColor,
+        preferredLineHeight: CGFloat
+    ) -> NSAttributedString {
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineBreakMode = .byWordWrapping
         paragraphStyle.minimumLineHeight = preferredLineHeight

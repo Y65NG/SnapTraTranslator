@@ -13,6 +13,7 @@
 		4948C18D22CBE0101C82D281 /* SmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 423F1844E7A13D4E51660DC4 /* SmokeTests.swift */; };
 		E1A111111111111111111111 /* HotkeyManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B111111111111111111111 /* HotkeyManagerTests.swift */; };
 		E1A222222222222222222222 /* OCRParagraphGroupingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B222222222222222222222 /* OCRParagraphGroupingTests.swift */; };
+		E1A333333333333333333333 /* ParagraphOverlayLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B333333333333333333333 /* ParagraphOverlayLayoutTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -34,6 +35,7 @@
 		D3F4D8FE2F14D1A2004035A9 /* SnapTra Translator.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "SnapTra Translator.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E1B111111111111111111111 /* HotkeyManagerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HotkeyManagerTests.swift; sourceTree = "<group>"; };
 		E1B222222222222222222222 /* OCRParagraphGroupingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OCRParagraphGroupingTests.swift; sourceTree = "<group>"; };
+		E1B333333333333333333333 /* ParagraphOverlayLayoutTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ParagraphOverlayLayoutTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -79,6 +81,7 @@
 				A9757C4D27EFDE23144043C9 /* SettingsStoreTests.swift */,
 				E1B111111111111111111111 /* HotkeyManagerTests.swift */,
 				E1B222222222222222222222 /* OCRParagraphGroupingTests.swift */,
+				E1B333333333333333333333 /* ParagraphOverlayLayoutTests.swift */,
 			);
 			path = "SnapTra TranslatorTests";
 			sourceTree = "<group>";
@@ -217,6 +220,7 @@
 				246061597EB29A21F9316CDF /* SettingsStoreTests.swift in Sources */,
 				E1A111111111111111111111 /* HotkeyManagerTests.swift in Sources */,
 				E1A222222222222222222222 /* OCRParagraphGroupingTests.swift in Sources */,
+				E1A333333333333333333333 /* ParagraphOverlayLayoutTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
