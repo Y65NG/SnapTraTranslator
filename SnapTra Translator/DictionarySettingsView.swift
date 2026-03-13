@@ -10,12 +10,14 @@ import SwiftUI
 
 struct TTSServiceRow: View {
     let provider: TTSProvider
-    let isWordSelected: Bool
+    let isSelected: Bool
     let latency: TTSLatencyTester.LatencyResult
-    let onWordSelect: () -> Void
+    let onSelect: () -> Void
     
     var body: some View {
         HStack(spacing: 12) {
+            selectionButton(isSelected: isSelected, action: onSelect)
+
             providerIcon
                 .frame(width: 24, height: 24)
 
@@ -28,8 +30,6 @@ struct TTSServiceRow: View {
             }
 
             Spacer()
-
-            selectionButton(isSelected: isWordSelected, label: L("Word"), action: onWordSelect)
 
             latencyView
         }
@@ -46,7 +46,7 @@ struct TTSServiceRow: View {
     }
 
     @ViewBuilder
-    private func selectionButton(isSelected: Bool, label: String, action: @escaping () -> Void) -> some View {
+    private func selectionButton(isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Circle()
                 .strokeBorder(isSelected ? Color.accentColor : Color.secondary.opacity(0.5), lineWidth: 1.5)
@@ -60,7 +60,6 @@ struct TTSServiceRow: View {
         }
         .buttonStyle(.plain)
         .frame(width: 24, height: 24)
-        .help(label)
     }
 
     @ViewBuilder
@@ -255,13 +254,15 @@ struct DictionarySettingsView: View {
     enum DictionaryTab: String, CaseIterable {
         case dictionary
         case sentence
-        case pronunciation
+        case wordPronunciation
+        case sentencePronunciation
 
         var title: String {
             switch self {
             case .dictionary: return L("Dictionary")
             case .sentence: return L("Sentence")
-            case .pronunciation: return L("Pronunciation")
+            case .wordPronunciation: return L("Word Pronunciation")
+            case .sentencePronunciation: return L("Sentence Pronunciation")
             }
         }
 
@@ -269,7 +270,8 @@ struct DictionarySettingsView: View {
             switch self {
             case .dictionary: return "books.vertical"
             case .sentence: return "text.bubble"
-            case .pronunciation: return "speaker.wave.2"
+            case .wordPronunciation: return "speaker.wave.2"
+            case .sentencePronunciation: return "megaphone"
             }
         }
     }
@@ -306,7 +308,10 @@ struct DictionarySettingsView: View {
         VStack(alignment: .leading, spacing: 4) {
             sidebarButton(for: .dictionary)
             sidebarButton(for: .sentence)
-            sidebarButton(for: .pronunciation)
+            Divider()
+                .padding(.vertical, 4)
+            sidebarButton(for: .wordPronunciation)
+            sidebarButton(for: .sentencePronunciation)
             Spacer()
         }
         .padding(12)
@@ -347,8 +352,10 @@ struct DictionarySettingsView: View {
                     dictionarySection
                 case .sentence:
                     sentenceTranslationSection
-                case .pronunciation:
-                    ttsSection
+                case .wordPronunciation:
+                    wordPronunciationSection
+                case .sentencePronunciation:
+                    sentencePronunciationSection
                 }
             }
             .padding()
@@ -425,12 +432,12 @@ struct DictionarySettingsView: View {
         }
     }
     
-    private var ttsSection: some View {
+    private var wordPronunciationSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(L("Pronunciation Service"))
+                Text(L("Word Pronunciation Service"))
                     .font(.headline)
-                Text(L("Select different TTS services for word and sentence pronunciation. Apple is offline, others require network."))
+                Text(L("Select TTS service for word pronunciation. Apple is offline, others require network."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -440,11 +447,11 @@ struct DictionarySettingsView: View {
 
             VStack(spacing: 6) {
                 HStack(spacing: 12) {
-                    Spacer()
-                    Text(L("Word"))
+                    Text(L("Select"))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
-                        .frame(width: 16)
+                        .frame(width: 24)
+                    Spacer()
                     Text(L("Latency"))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
@@ -456,55 +463,15 @@ struct DictionarySettingsView: View {
                 ForEach(TTSProvider.allCases) { provider in
                     TTSServiceRow(
                         provider: provider,
-                        isWordSelected: model.settings.wordTTSProvider == provider,
+                        isSelected: model.settings.wordTTSProvider == provider,
                         latency: ttsTester.latencies[provider] ?? .pending,
-                        onWordSelect: { model.settings.wordTTSProvider = provider }
+                        onSelect: { model.settings.wordTTSProvider = provider }
                     )
                 }
             }
             .padding(.horizontal)
 
-            // English Accent Selection (only for services that support it)
-            if model.settings.wordTTSProvider != .apple && model.settings.wordTTSProvider != .google
-                || model.settings.sentenceTTSProvider != .apple && model.settings.sentenceTTSProvider != .google {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text(L("English Accent"))
-                            .font(.system(size: 13))
-                        Spacer()
-                        Picker("", selection: Binding(
-                            get: { model.settings.englishAccent },
-                            set: { newValue in
-                                DispatchQueue.main.async {
-                                    model.settings.englishAccent = newValue
-                                }
-                            }
-                        )) {
-                            ForEach(EnglishAccent.allCases) { accent in
-                                Text(accent.displayName).tag(accent)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(width: 180)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(Color(nsColor: .controlBackgroundColor))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(.quaternary, lineWidth: 0.5)
-                    )
-                    .padding(.horizontal)
-                    
-                    Text(L("Apple uses system voice and does not support accent selection"))
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .padding(.horizontal)
-                }
-            }
+            englishAccentSection(for: model.settings.wordTTSProvider)
 
             HStack {
                 Spacer()
@@ -536,6 +503,123 @@ struct DictionarySettingsView: View {
             }
             .padding(.horizontal)
             .padding(.bottom)
+        }
+    }
+
+    private var sentencePronunciationSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L("Sentence Pronunciation Service"))
+                    .font(.headline)
+                Text(L("Select TTS service for sentence pronunciation. Apple is offline, others require network."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal)
+            .padding(.top)
+
+            VStack(spacing: 6) {
+                HStack(spacing: 12) {
+                    Text(L("Select"))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 24)
+                    Spacer()
+                    Text(L("Latency"))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 60, alignment: .trailing)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+
+                ForEach(TTSProvider.allCases) { provider in
+                    TTSServiceRow(
+                        provider: provider,
+                        isSelected: model.settings.sentenceTTSProvider == provider,
+                        latency: ttsTester.latencies[provider] ?? .pending,
+                        onSelect: { model.settings.sentenceTTSProvider = provider }
+                    )
+                }
+            }
+            .padding(.horizontal)
+
+            englishAccentSection(for: model.settings.sentenceTTSProvider)
+
+            HStack {
+                Spacer()
+                Button {
+                    Task { await ttsTester.testAllProviders() }
+                } label: {
+                    HStack(spacing: 6) {
+                        if ttsTester.isTesting {
+                            ProgressView()
+                                .controlSize(.small)
+                                .scaleEffect(0.7)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        Text(L("Refresh Latency"))
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .padding(.vertical, 6)
+                .padding(.horizontal, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(.quaternary)
+                )
+                .disabled(ttsTester.isTesting)
+            }
+            .padding(.horizontal)
+            .padding(.bottom)
+        }
+    }
+
+    @ViewBuilder
+    private func englishAccentSection(for provider: TTSProvider) -> some View {
+        if provider != .apple && provider != .google {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(L("English Accent"))
+                        .font(.system(size: 13))
+                    Spacer()
+                    Picker("", selection: Binding(
+                        get: { model.settings.englishAccent },
+                        set: { newValue in
+                            DispatchQueue.main.async {
+                                model.settings.englishAccent = newValue
+                            }
+                        }
+                    )) {
+                        ForEach(EnglishAccent.allCases) { accent in
+                            Text(accent.displayName).tag(accent)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 180)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color(nsColor: .controlBackgroundColor))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(.quaternary, lineWidth: 0.5)
+                )
+                .padding(.horizontal)
+                
+                Text(L("Apple uses system voice and does not support accent selection"))
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal)
+            }
         }
     }
 
