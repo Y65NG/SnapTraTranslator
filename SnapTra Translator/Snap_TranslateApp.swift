@@ -310,15 +310,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     // When statusItem.menu is set, the system handles menu display automatically
     @objc private func statusItemClicked(_ sender: NSStatusBarButton) {}
 
-    @objc private func toggleWordPronunciation() {
+    @MainActor @objc private func toggleWordPronunciation() {
         model.settings.playWordPronunciation.toggle()
     }
 
-    @objc private func toggleSentencePronunciation() {
+    @MainActor @objc private func toggleSentencePronunciation() {
         model.settings.playSentencePronunciation.toggle()
     }
 
-    @objc private func toggleContinuousTranslation() {
+    @MainActor @objc private func toggleContinuousTranslation() {
         model.settings.continuousTranslation.toggle()
     }
 
@@ -334,6 +334,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         openSettings(initialTab: .general)
     }
 
+    @MainActor
     private func openSettings(initialTab: SettingsTab) {
         isManualWindowOpen = true
         NSApp.setActivationPolicy(.regular)
@@ -392,7 +393,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     private func updateVisibilityFromCurrentState() async {
-        var needsSettings = !model.permissions.status.screenRecording
+        var needsSettings = !(await model.permissions.status.screenRecording)
 
         if #available(macOS 15.0, *) {
             let status = await model.languagePackManager?.checkLanguagePairQuiet(
@@ -407,16 +408,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
 
         if needsSettings {
-            showSettingsWindow()
+            await showSettingsWindow()
         } else if shouldShowWindowAfterPermissionGrant {
             shouldShowWindowAfterPermissionGrant = false
             isManualWindowOpen = true
-            showSettingsWindow()
+            await showSettingsWindow()
         } else if !isManualWindowOpen {
             hideDockIcon()
         }
     }
 
+    @MainActor
     private func showSettingsWindow(initialTab: SettingsTab = .general) {
         let windowController = settingsWindowController ?? SettingsWindowController(model: model, initialTab: initialTab)
         settingsWindowController = windowController
