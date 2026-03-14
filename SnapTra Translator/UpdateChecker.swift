@@ -6,22 +6,12 @@ enum DistributionChannel {
     case github
     case appStore
 
-    static var current: DistributionChannel {
-        // First check explicit marker in Info.plist
+    static var isGitHubRelease: Bool {
         if let channel = Bundle.main.infoDictionary?["DISTRIBUTION_CHANNEL"] as? String,
            channel == "github" {
-            return .github
+            return true
         }
-
-        // Then check App Store receipt
-        if let receiptURL = Bundle.main.appStoreReceiptURL {
-            // Check if receipt actually exists on disk
-            if FileManager.default.fileExists(atPath: receiptURL.path) {
-                return .appStore
-            }
-        }
-
-        return .github
+        return false
     }
 }
 
@@ -33,8 +23,8 @@ final class UpdateChecker: NSObject, SPUUpdaterDelegate {
     private let checkInterval: TimeInterval = 24 * 60 * 60
     private var autoCheckTimer: Timer?
 
-    var isAppStore: Bool {
-        DistributionChannel.current == .appStore
+    var isGitHubRelease: Bool {
+        DistributionChannel.isGitHubRelease
     }
 
     private override init() {
@@ -42,7 +32,7 @@ final class UpdateChecker: NSObject, SPUUpdaterDelegate {
     }
 
     func initialize() {
-        guard !isAppStore else { return }
+        guard isGitHubRelease else { return }
         guard updaterController == nil else { return }
 
         updaterController = SPUStandardUpdaterController(
@@ -62,7 +52,7 @@ final class UpdateChecker: NSObject, SPUUpdaterDelegate {
     }
 
     func startAutoCheckIfNeeded() {
-        guard !isAppStore else { return }
+        guard isGitHubRelease else { return }
         guard SettingsStore.shared.autoCheckUpdates else { return }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
@@ -78,7 +68,7 @@ final class UpdateChecker: NSObject, SPUUpdaterDelegate {
     }
 
     func checkForUpdates(silent: Bool = false) {
-        if isAppStore {
+        guard isGitHubRelease else {
             guard !silent else { return }
             openAppStore()
             return
@@ -86,7 +76,7 @@ final class UpdateChecker: NSObject, SPUUpdaterDelegate {
 
         guard let controller = updaterController else {
             if !silent {
-                showManualUpdateAlert()
+                openAppStore()
             }
             return
         }
@@ -99,7 +89,7 @@ final class UpdateChecker: NSObject, SPUUpdaterDelegate {
     }
 
     func checkForUpdatesWithUI() {
-        if isAppStore {
+        guard isGitHubRelease else {
             openAppStore()
             return
         }
@@ -168,23 +158,6 @@ final class UpdateChecker: NSObject, SPUUpdaterDelegate {
         alert.informativeText = "\(L("Auto-update failed. You can download the latest version from GitHub."))\n\n\(L("Error")): \(error.localizedDescription)"
         alert.alertStyle = .warning
         alert.addButton(withTitle: L("Download from GitHub"))
-        alert.addButton(withTitle: L("OK"))
-
-        NSApp.activate(ignoringOtherApps: true)
-        let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            if let url = URL(string: "https://github.com/yelog/SnapTraTranslator/releases/latest") {
-                NSWorkspace.shared.open(url)
-            }
-        }
-    }
-
-    private func showManualUpdateAlert() {
-        let alert = NSAlert()
-        alert.messageText = L("Update Check Failed")
-        alert.informativeText = L("Auto-updater is not available. Please visit GitHub to download the latest version.")
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: L("Go to GitHub"))
         alert.addButton(withTitle: L("OK"))
 
         NSApp.activate(ignoringOtherApps: true)

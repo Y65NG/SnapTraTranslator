@@ -74,9 +74,14 @@ struct AboutSettingsView: View {
                         .strokeBorder(.quaternary, lineWidth: 0.5)
                 )
 
+                // Update Channel (GitHub Release only)
+                if UpdateChecker.shared.isGitHubRelease {
+                    UpdateChannelSelector()
+                }
+
                 // Check for Updates
                 Button {
-                    openAppStore()
+                    UpdateChecker.shared.checkForUpdatesWithUI()
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "sparkle")
@@ -268,5 +273,78 @@ struct LinkButton: View {
             )
         }
         .buttonStyle(.plain)
+    }
+}
+
+struct UpdateChannelSelector: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        VStack(spacing: 0) {
+            UpdateChannelRow(channel: .stable, isSelected: model.settings.updateChannel == .stable) {
+                model.settings.updateChannel = .stable
+            }
+            Divider()
+                .padding(.horizontal, 14)
+                .opacity(0.5)
+            UpdateChannelRow(channel: .beta, isSelected: model.settings.updateChannel == .beta) {
+                model.settings.updateChannel = .beta
+            }
+        }
+        .background(cardBackground)
+        .overlay(cardBorder)
+    }
+
+    private var cardBackground: some View {
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(.background)
+            .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 2)
+            .shadow(color: .black.opacity(0.02), radius: 1, x: 0, y: 1)
+    }
+
+    private var cardBorder: some View {
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .strokeBorder(.quaternary, lineWidth: 0.5)
+    }
+}
+
+private struct UpdateChannelRow: View {
+    let channel: UpdateChannel
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                iconView
+                textContentView
+                Spacer()
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var iconView: some View {
+        let iconName = isSelected ? "checkmark.circle.fill" : "circle"
+        let iconColor: Color = isSelected ? .accentColor : .secondary
+        return Image(systemName: iconName)
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(iconColor)
+            .frame(width: 22)
+    }
+
+    private var textContentView: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(channel.displayName)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.primary)
+
+            Text(channel.description)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+        }
     }
 }
