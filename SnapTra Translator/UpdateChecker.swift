@@ -7,14 +7,18 @@ enum DistributionChannel {
     case appStore
 
     static var current: DistributionChannel {
-        if let _ = Bundle.main.appStoreReceiptURL?.path,
-           Bundle.main.appStoreReceiptURL?.path.isEmpty == false {
-            return .appStore
-        }
-
+        // First check explicit marker in Info.plist
         if let channel = Bundle.main.infoDictionary?["DISTRIBUTION_CHANNEL"] as? String,
            channel == "github" {
             return .github
+        }
+
+        // Then check App Store receipt
+        if let receiptURL = Bundle.main.appStoreReceiptURL {
+            // Check if receipt actually exists on disk
+            if FileManager.default.fileExists(atPath: receiptURL.path) {
+                return .appStore
+            }
         }
 
         return .github
