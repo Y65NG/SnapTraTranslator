@@ -7,22 +7,12 @@ enum DistributionChannel {
     case appStore
 
     static var current: DistributionChannel {
-        // First check explicit marker in Info.plist
+        // Only GitHub Release builds have DISTRIBUTION_CHANNEL set
         if let channel = Bundle.main.infoDictionary?["DISTRIBUTION_CHANNEL"] as? String,
            channel == "github" {
             return .github
         }
-
-        // Then check App Store receipt
-        if let receiptURL = Bundle.main.appStoreReceiptURL {
-            // Check if receipt actually exists on disk
-            if FileManager.default.fileExists(atPath: receiptURL.path) {
-                return .appStore
-            }
-        }
-
-        // Default to GitHub for non-App Store builds
-        return .github
+        return .appStore
     }
 
     static var isGitHubRelease: Bool {

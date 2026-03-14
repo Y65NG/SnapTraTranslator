@@ -14,6 +14,11 @@ struct OverlayView: View {
     private let paragraphOverlayWidth: CGFloat = 520
     private let paragraphHeaderHeight: CGFloat = 34
     private let compactSectionMinHeight: CGFloat = 28
+    private let paragraphTextHorizontalPadding: CGFloat = 18
+
+    private static let minParagraphFontSize: CGFloat = 10
+    private static let maxParagraphFontSize: CGFloat = 20
+    private static let baseParagraphFontSize: CGFloat = 13
 
     init(
         paragraphOverlayMaxHeightOverride: CGFloat? = nil,
@@ -224,6 +229,13 @@ struct OverlayView: View {
 
     @ViewBuilder
     private func paragraphResultView(content: ParagraphOverlayContent) -> some View {
+        let optimalFontSize: CGFloat = {
+            if let originalText = content.originalText, !originalText.isEmpty {
+                return calculateOptimalFontSize(for: originalText, containerWidth: paragraphOverlayWidth)
+            }
+            return Self.baseParagraphFontSize
+        }()
+
         VStack(alignment: .leading, spacing: 0) {
             paragraphTopBar()
 
@@ -234,18 +246,18 @@ struct OverlayView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         paragraphTextContent(
                             text: originalText,
-                            font: .systemFont(ofSize: 13, weight: .medium),
+                            font: .systemFont(ofSize: optimalFontSize, weight: .medium),
                             textColor: .labelColor,
-                            preferredLineHeight: 20
+                            preferredLineHeight: optimalFontSize * 1.5
                         )
-                        .padding(.horizontal, 18)
+                        .padding(.horizontal, paragraphTextHorizontalPadding)
                         .padding(.top, 2)
                         .padding(.bottom, 14)
                     }
 
                     // Divider after original text
                     Divider()
-                        .padding(.horizontal, 18)
+                        .padding(.horizontal, paragraphTextHorizontalPadding)
                         .opacity(0.6)
 
                     // Native Translation Section (System Translation)
@@ -260,7 +272,7 @@ struct OverlayView: View {
                                     .foregroundStyle(.secondary)
                                 LoadingDotsView()
                             }
-                            .padding(.horizontal, 18)
+                            .padding(.horizontal, paragraphTextHorizontalPadding)
                             .padding(.vertical, 14)
                         }
 
@@ -272,18 +284,18 @@ struct OverlayView: View {
 
                             paragraphTextContent(
                                 text: translatedText,
-                                font: .systemFont(ofSize: 13, weight: .semibold),
+                                font: .systemFont(ofSize: optimalFontSize, weight: .semibold),
                                 textColor: .labelColor,
-                                preferredLineHeight: 20
+                                preferredLineHeight: optimalFontSize * 1.5
                             )
                         }
-                        .padding(.horizontal, 18)
+                        .padding(.horizontal, paragraphTextHorizontalPadding)
                         .padding(.vertical, 14)
 
                     case .failed(let message):
                         VStack(alignment: .leading, spacing: 0) {
                             paragraphErrorContent(message: L(message))
-                                .padding(.horizontal, 18)
+                                .padding(.horizontal, paragraphTextHorizontalPadding)
                                 .padding(.vertical, 14)
                         }
                     }
@@ -292,16 +304,16 @@ struct OverlayView: View {
                     if !content.serviceResults.isEmpty {
                         ForEach(content.serviceResults) { result in
                             Divider()
-                                .padding(.horizontal, 18)
+                                .padding(.horizontal, paragraphTextHorizontalPadding)
                                 .opacity(0.6)
 
-                            paragraphServiceResultCard(result: result)
+                            paragraphServiceResultCard(result: result, fontSize: optimalFontSize)
                         }
                     }
                 } else if case .failed(let message) = content.translationState {
                     // Auto-dismiss error view for paragraph translation errors
                     AutoDismissErrorView(message: L(message), onDismiss: { model.dismissOverlay() })
-                        .padding(.horizontal, 18)
+                        .padding(.horizontal, paragraphTextHorizontalPadding)
                         .padding(.vertical, 18)
                 }
             }
@@ -309,7 +321,7 @@ struct OverlayView: View {
     }
 
     @ViewBuilder
-    private func paragraphServiceResultCard(result: ServiceTranslationResult) -> some View {
+    private func paragraphServiceResultCard(result: ServiceTranslationResult, fontSize: CGFloat) -> some View {
         let title = "\(result.sourceType.displayName)"
 
         switch result.state {
@@ -328,7 +340,7 @@ struct OverlayView: View {
                     LoadingDotsView()
                 }
             }
-            .padding(.horizontal, 18)
+            .padding(.horizontal, paragraphTextHorizontalPadding)
             .padding(.vertical, 14)
 
         case .ready(let translatedText):
@@ -339,12 +351,12 @@ struct OverlayView: View {
 
                 paragraphTextContent(
                     text: translatedText,
-                    font: .systemFont(ofSize: 13, weight: .medium),
+                    font: .systemFont(ofSize: fontSize, weight: .medium),
                     textColor: .labelColor,
-                    preferredLineHeight: 20
+                    preferredLineHeight: fontSize * 1.5
                 )
             }
-            .padding(.horizontal, 18)
+            .padding(.horizontal, paragraphTextHorizontalPadding)
             .padding(.vertical, 14)
 
         case .failed(let message):
@@ -355,7 +367,7 @@ struct OverlayView: View {
 
                 paragraphErrorContent(message: message)
             }
-            .padding(.horizontal, 18)
+            .padding(.horizontal, paragraphTextHorizontalPadding)
             .padding(.vertical, 14)
         }
     }
@@ -464,6 +476,34 @@ struct OverlayView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    private func calculateOptimalFontSize(
+        for text: String,
+        containerWidth: CGFloat
+    ) -> CGFloat {
+        let lines = text.components(separatedBy: .newlines).filter { !$0.isEmpty }
+        guard !lines.isEmpty else { return Self.baseParagraphFontSize }
+
+        let availableWidth = containerWidth - paragraphTextHorizontalPadding * 2
+        let baseFont = NSFont.systemFont(ofSize: Self.baseParagraphFontSize, weight: .medium)
+
+        var maxLineWidth: CGFloat = 0
+        for line in lines {
+            let attributedString = NSAttributedString(
+                string: line,
+                attributes: [.font: baseFont]
+            )
+            let textSize = attributedString.size()
+            maxLineWidth = max(maxLineWidth, textSize.width)
+        }
+
+        guard maxLineWidth > 0 else { return Self.baseParagraphFontSize }
+
+        let scaleFactor = availableWidth / maxLineWidth
+        let optimalSize = Self.baseParagraphFontSize * scaleFactor
+
+        return min(max(optimalSize, Self.minParagraphFontSize), Self.maxParagraphFontSize)
     }
 
     @ViewBuilder
