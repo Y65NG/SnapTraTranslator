@@ -151,4 +151,42 @@ final class OCRParagraphGroupingTests: XCTestCase {
             "• 无限多代理并行执行\n保持现有面板行为。"
         )
     }
+
+    func testGroupParagraphsMergesSameBaselineFragmentsIntoSingleLine() {
+        let lines = [
+            RecognizedTextLine(
+                text: "you",
+                boundingBox: CGRect(x: 0.10, y: 0.72, width: 0.10, height: 0.06)
+            ),
+            RecognizedTextLine(
+                text: "test some word",
+                boundingBox: CGRect(x: 0.24, y: 0.721, width: 0.34, height: 0.059)
+            ),
+        ]
+
+        let paragraphs = OCRService.groupParagraphs(from: lines)
+
+        XCTAssertEqual(paragraphs.count, 1)
+        XCTAssertEqual(paragraphs.first?.text, "you test some word")
+        XCTAssertEqual(paragraphs.first?.lines.count, 1)
+        XCTAssertEqual(paragraphs.first?.lines.first?.text, "you test some word")
+    }
+
+    func testGroupParagraphsDoesNotMergeFarSameBaselineColumns() {
+        let lines = [
+            RecognizedTextLine(
+                text: "Primary content",
+                boundingBox: CGRect(x: 0.10, y: 0.72, width: 0.20, height: 0.05)
+            ),
+            RecognizedTextLine(
+                text: "Sidebar tools",
+                boundingBox: CGRect(x: 0.56, y: 0.721, width: 0.18, height: 0.05)
+            ),
+        ]
+
+        let paragraphs = OCRService.groupParagraphs(from: lines)
+
+        XCTAssertEqual(paragraphs.count, 2)
+        XCTAssertEqual(paragraphs.map(\.text), ["Primary content", "Sidebar tools"])
+    }
 }

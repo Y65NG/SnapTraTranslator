@@ -584,7 +584,7 @@ final class AppModel: ObservableObject {
         do {
             let (paragraphs, lines) = try await ocrService.recognizeParagraphsWithRawLines(
                 in: capture.image,
-                language: "en"
+                language: settings.sourceLanguage
             )
             guard !Task.isCancelled, activeLookupID == lookupID else { return }
 
@@ -595,26 +595,17 @@ final class AppModel: ObservableObject {
             )
 
             switch selectionResult {
-            case .nonEnglish:
-                // Cursor is on non-English content (Chinese, etc.)
-                paragraphHighlightWindowController.hide()
-                let content = ParagraphOverlayContent(
-                    originalText: nil,
-                    translationState: .failed("Non-English content detected. Paragraph translation only supports English.")
-                )
-                updateOverlay(state: .paragraphResult(content), anchor: mouseLocation)
-                return
             case .noText:
                 // No text found near cursor
                 paragraphHighlightWindowController.hide()
                 let content = ParagraphOverlayContent(
                     originalText: nil,
-                    translationState: .failed("No English paragraph detected under cursor")
+                    translationState: .failed("No paragraph detected under cursor")
                 )
                 updateOverlay(state: .paragraphResult(content), anchor: mouseLocation)
                 return
             case .english(let paragraph):
-                // Found English paragraph - continue with translation
+                // Found paragraph - continue with translation
                 let paragraphRect = screenRect(for: paragraph.boundingBox, in: capture.region.rect)
                 let bodyFontSize = OCRService.estimatedDisplayFontSize(
                     for: paragraph,
@@ -1137,7 +1128,7 @@ final class AppModel: ObservableObject {
 
     private func resolveParagraphLanguagePair() -> LookupLanguagePair {
         .fixed(
-            sourceIdentifier: "en",
+            sourceIdentifier: settings.sourceLanguage,
             targetIdentifier: settings.targetLanguage
         )
     }

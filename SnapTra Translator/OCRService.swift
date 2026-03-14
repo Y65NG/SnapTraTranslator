@@ -136,6 +136,8 @@ final class OCRService {
     }
 
     nonisolated static func groupParagraphs(from lines: [RecognizedTextLine]) -> [RecognizedParagraph] {
+        let mergedLines = mergeHorizontallyAdjacentLineFragments(in: lines)
+
         // Step 1: Cluster lines into columns by their left-edge (minX).
         //
         // Multi-column pages (e.g. Twitter) interleave lines from different columns
@@ -152,7 +154,7 @@ final class OCRService {
 
         var columnBuckets: [(representativeX: CGFloat, lines: [RecognizedTextLine])] = []
 
-        for line in lines {
+        for line in mergedLines {
             guard containsLikelyParagraphContent(line.text) else { continue }
 
             let x = line.boundingBox.minX
@@ -238,10 +240,8 @@ final class OCRService {
 
     /// Result type for paragraph selection with language detection
     enum ParagraphSelectionResult {
-        /// Found an English paragraph at the cursor position
+        /// Found a paragraph at the cursor position
         case english(RecognizedParagraph)
-        /// Cursor is on non-English content (Chinese, etc.)
-        case nonEnglish
         /// No text found at cursor position
         case noText
     }
@@ -255,26 +255,15 @@ final class OCRService {
     ) -> ParagraphSelectionResult {
         let tolerance: CGFloat = 0.01
 
-        // Phase 1: Check if cursor is on any text line (including non-English)
-        let containingLines = lines.filter { line in
-            line.boundingBox.insetBy(dx: -tolerance, dy: -tolerance).contains(normalizedPoint)
+        // Check if cursor is on any paragraph
+        if let paragraph = paragraphs.first(where: { paragraph in
+            paragraph.boundingBox.insetBy(dx: -tolerance, dy: -tolerance).contains(normalizedPoint)
+        }) {
+            return .english(paragraph)
         }
 
-        if !containingLines.isEmpty {
-            // Cursor is on some text - check if it's an English paragraph
-            if let englishParagraph = paragraphs.first(where: { paragraph in
-                paragraph.boundingBox.insetBy(dx: -tolerance, dy: -tolerance).contains(normalizedPoint)
-            }) {
-                // Cursor is on English paragraph
-                return .english(englishParagraph)
-            } else {
-                // Cursor is on non-English text (Chinese, etc.)
-                return .nonEnglish
-            }
-        }
-
-        // Phase 2: Cursor is not on any text - find nearest English paragraph with reduced search radius
-        let maxDistance: CGFloat = 0.08  // Reduced from 0.18 to avoid selecting distant paragraphs
+        // Cursor is not on any paragraph - find nearest one with reduced search radius
+        let maxDistance: CGFloat = 0.08
         let closestParagraph = paragraphs
             .compactMap { paragraph -> (RecognizedParagraph, CGFloat)? in
                 let distance = hypot(
@@ -442,6 +431,104 @@ final class OCRService {
         token.unicodeScalars.contains { letterSet.contains($0) }
     }
 
+    nonisolated private static func mergeHorizontallyAdjacentLineFragments(
+        in lines: [RecognizedTextLine]
+    ) -> [RecognizedTextLine] {
+        let sortedLines = lines
+            .map {
+                RecognizedTextLine(
+                    text: $0.text.trimmingCharacters(in: .whitespacesAndNewlines),
+                    boundingBox: $0.boundingBox
+                )
+            }
+            .filter { !$0.text.isEmpty }
+            .sorted { lhs, rhs in
+                if abs(lhs.boundingBox.midY - rhs.boundingBox.midY) > 0.005 {
+                    return lhs.boundingBox.midY > rhs.boundingBox.midY
+                }
+                return lhs.boundingBox.minX < rhs.boundingBox.minX
+            }
+
+        var mergedLines: [RecognizedTextLine] = []
+
+        for line in sortedLines {
+            if var previous = mergedLines.last,
+               shouldMergeLineFragments(previous: previous, next: line) {
+                previous.text = mergedLineText(previous.text, line.text)
+                previous.boundingBox = previous.boundingBox.union(line.boundingBox)
+                mergedLines[mergedLines.count - 1] = previous
+            } else {
+                mergedLines.append(line)
+            }
+        }
+
+        return mergedLines
+    }
+
+    nonisolated private static func shouldMergeLineFragments(
+        previous: RecognizedTextLine,
+        next: RecognizedTextLine
+    ) -> Bool {
+        let previousHeight = previous.boundingBox.height
+        let nextHeight = next.boundingBox.height
+        let minHeight = min(previousHeight, nextHeight)
+        let maxHeight = max(previousHeight, nextHeight)
+        guard minHeight > 0 else { return false }
+
+        let heightRatio = maxHeight / minHeight
+        guard heightRatio <= 1.35 else { return false }
+
+        let verticalOverlap = max(
+            0,
+            min(previous.boundingBox.maxY, next.boundingBox.maxY)
+                - max(previous.boundingBox.minY, next.boundingBox.minY)
+        )
+        let verticalOverlapRatio = verticalOverlap / minHeight
+        guard verticalOverlapRatio >= 0.7 else { return false }
+
+        let horizontalGap = next.boundingBox.minX - previous.boundingBox.maxX
+        let allowedGap = max(maxHeight * 1.8, 0.018)
+        guard horizontalGap >= -maxHeight * 0.2, horizontalGap <= allowedGap else {
+            return false
+        }
+
+        return true
+    }
+
+    nonisolated private static func mergedLineText(
+        _ previous: String,
+        _ next: String
+    ) -> String {
+        let lhs = previous.trimmingCharacters(in: .whitespacesAndNewlines)
+        let rhs = next.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !lhs.isEmpty else { return rhs }
+        guard !rhs.isEmpty else { return lhs }
+
+        if shouldInsertSpaceBetweenLineFragments(previous: lhs, next: rhs) {
+            return "\(lhs) \(rhs)"
+        }
+
+        return lhs + rhs
+    }
+
+    nonisolated private static func shouldInsertSpaceBetweenLineFragments(
+        previous: String,
+        next: String
+    ) -> Bool {
+        guard let previousScalar = previous.unicodeScalars.last,
+              let nextScalar = next.unicodeScalars.first else {
+            return false
+        }
+
+        let asciiWordCharacterSet = CharacterSet.alphanumerics
+        let insertsAfter = asciiWordCharacterSet.contains(previousScalar)
+            || ",.;:!?)]}\"'".unicodeScalars.contains(previousScalar)
+        let insertsBefore = asciiWordCharacterSet.contains(nextScalar)
+
+        return previousScalar.isASCII && nextScalar.isASCII && insertsAfter && insertsBefore
+    }
+
     nonisolated private static func shouldJoinParagraph(
         previous: RecognizedTextLine,
         next: RecognizedTextLine
@@ -517,21 +604,10 @@ final class OCRService {
 
     nonisolated private static func isLikelyEnglishParagraph(_ text: String) -> Bool {
         let letters = text.unicodeScalars.filter { letterSet.contains($0) }
-        guard letters.count >= 12 else {
+        guard letters.count >= 3 else {
             return false
         }
-
-        let englishLetters = text.unicodeScalars.filter { tokenCharacterSet.contains($0) }
-        guard !letters.isEmpty else {
-            return false
-        }
-
-        let englishRatio = Double(englishLetters.count) / Double(letters.count)
-        let words = text.split(whereSeparator: \.isWhitespace).filter { token in
-            token.unicodeScalars.contains { tokenCharacterSet.contains($0) }
-        }
-
-        return englishRatio >= 0.65 && words.count >= 3
+        return true
     }
 
     /// Estimates the display font size for a paragraph based on its line heights
