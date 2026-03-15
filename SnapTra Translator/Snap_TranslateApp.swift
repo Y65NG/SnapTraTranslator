@@ -274,7 +274,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
         // Debug: Show Update Channel Selector
         let debugShowChannelItem = NSMenuItem(
-            title: "显示更新通道选择器",
+            title: "GitHub Release",
             action: #selector(toggleDebugShowChannelSelector),
             keyEquivalent: ""
         )
