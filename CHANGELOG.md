@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release
 
+## [1.3.4-beta.3] - 2026-03-15
+
+### Added
+- Add debug toggle for GitHub release channel selector in menu bar for testing
+
+### Fixed
+- Make update channel selector toggle work in real-time without restart
+- Relax OCR selection and merge split lines in paragraph mode
+- Size paragraph text from actual panel width
+- Only show update channel options for GitHub releases
+- Move debug OCR option and auto-disable on sentence translation
+- Prevent panel from showing without screen recording permission
+- Increase about page height for GitHub releases
+
 ## [1.3.4-beta.2] - 2026-03-14
 
 ### Fixed
