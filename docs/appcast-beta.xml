@@ -7,6 +7,15 @@
         <language>en</language>
         <sparkle:edPublicKey>OJo/oEqSjtmok1HYx+XgFHLq1FkUAJs8hsDms0+Uv98=</sparkle:edPublicKey>
         <item>
+            <title>Version 1.3.4-beta.10</title>
+            <pubDate>Sun, 15 Mar 2026 11:46:10 +0000</pubDate>
+            <sparkle:version>13410</sparkle:version>
+            <sparkle:shortVersionString>1.3.4-beta.10</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description>&lt;h2&gt;SnapTra Translator 1.3.4-beta.10&lt;/h2&gt;&lt;ul&gt;&lt;li&gt;Version 1.3.4-beta.10 release&lt;/li&gt;&lt;/ul&gt;</description>
+            <enclosure url="https://github.com/yelog/SnapTraTranslator/releases/download/v1.3.4-beta.10/SnapTra-Translator-1.3.4-beta.10.dmg" length="5025747" type="application/octet-stream" sparkle:edSignature="CtHP5juZCfJQSQ48Ru60HCMYV2h8tVGHfwCvt87siwc3b/FD5agkBQrVJ+aCXTPWkeK1vpFvb+Vvr7HHboOLAg==" />
+        </item>
+        <item>
             <title>Version 1.3.4-beta.6</title>
             <pubDate>Sun, 15 Mar 2026 08:53:57 +0000</pubDate>
             <sparkle:version>13406</sparkle:version>
