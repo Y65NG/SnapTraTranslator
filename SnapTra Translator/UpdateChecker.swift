@@ -182,6 +182,25 @@ final class UpdateChecker: NSObject, SPUUpdaterDelegate {
         }
     }
 
+    // MARK: - GitHub Releases
+
+    private func openGitHubReleases() {
+        let channelValue = UserDefaults.standard.string(forKey: AppSettingKey.updateChannel) ?? "stable"
+        let channel = UpdateChannel(rawValue: channelValue) ?? .stable
+
+        let urlString: String
+        switch channel {
+        case .stable:
+            urlString = "https://github.com/yelog/SnapTraTranslator/releases/latest"
+        case .beta:
+            urlString = "https://github.com/yelog/SnapTraTranslator/releases"
+        }
+
+        if let url = URL(string: urlString) {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     // MARK: - Alerts
 
     private func showSparkleNotInitializedAlert() {
@@ -195,9 +214,7 @@ final class UpdateChecker: NSObject, SPUUpdaterDelegate {
         NSApp.activate(ignoringOtherApps: true)
         let response = alert.runModal()
         if response == .alertFirstButtonReturn {
-            if let url = URL(string: "https://github.com/yelog/SnapTraTranslator/releases/latest") {
-                NSWorkspace.shared.open(url)
-            }
+            openGitHubReleases()
         }
     }
 
@@ -212,9 +229,7 @@ final class UpdateChecker: NSObject, SPUUpdaterDelegate {
         NSApp.activate(ignoringOtherApps: true)
         let response = alert.runModal()
         if response == .alertFirstButtonReturn {
-            if let url = URL(string: "https://github.com/yelog/SnapTraTranslator/releases/latest") {
-                NSWorkspace.shared.open(url)
-            }
+            openGitHubReleases()
         }
     }
 }
