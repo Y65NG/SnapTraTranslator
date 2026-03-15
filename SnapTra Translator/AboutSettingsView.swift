@@ -27,11 +27,20 @@ struct AboutSettingsView: View {
     var hidesScrollIndicator: Bool = false
 
     #if DEBUG
-    // Access debugShowChannelSelector to make SwiftUI re-render when it changes
-    private var showChannelSelector: Bool {
-        model.settings.debugShowChannelSelector
+    /// Whether to show the update channel selector
+    /// In DEBUG mode, checks both actual GitHub release status and debug override
+    private var shouldShowChannelSelector: Bool {
+        UpdateChecker.shared.isGitHubRelease || model.settings.debugShowChannelSelector
+    }
+    #else
+    private var shouldShowChannelSelector: Bool {
+        UpdateChecker.shared.isGitHubRelease
     }
     #endif
+
+    private func checkForUpdates() {
+        UpdateChecker.shared.checkForUpdatesWithUI()
+    }
 
     var body: some View {
         ScrollView {
@@ -82,18 +91,18 @@ struct AboutSettingsView: View {
                 )
 
                 // Update Channel (GitHub Release only)
-                if UpdateChecker.shared.isGitHubRelease {
+                if shouldShowChannelSelector {
                     UpdateChannelSelector()
                 }
 
                 // Check for Updates
                 Button {
-                    UpdateChecker.shared.checkForUpdatesWithUI()
+                    checkForUpdates()
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "sparkle")
+                        Image(systemName: shouldShowChannelSelector ? "arrow.down.circle" : "sparkle")
                             .font(.system(size: 12, weight: .medium))
-                        Text(L("Check for Updates"))
+                        Text(shouldShowChannelSelector ? L("Check for GitHub Updates") : L("Check for Updates"))
                             .font(.system(size: 13, weight: .medium))
                     }
                 }

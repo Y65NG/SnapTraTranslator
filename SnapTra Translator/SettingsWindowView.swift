@@ -83,6 +83,33 @@ struct SettingsWindowView: View {
         _selectedTab = State(initialValue: initialTab)
     }
 
+    /// Dynamic content width based on selected tab
+    private var currentContentWidth: CGFloat {
+        SettingsWindowLayout.contentWidth(for: selectedTab)
+    }
+
+    /// Dynamic content height based on selected tab and debug settings
+    private var currentContentHeight: CGFloat {
+        switch selectedTab {
+        case .general:
+            return SettingsWindowLayout.generalContentHeight
+        case .service:
+            return SettingsWindowLayout.dictionaryContentHeight
+        case .about:
+            #if DEBUG
+            // Access debugShowChannelSelector to establish SwiftUI dependency
+            if UpdateChecker.shared.isGitHubRelease || model.settings.debugShowChannelSelector {
+                return SettingsWindowLayout.aboutContentHeightWithChannelSelector
+            }
+            #else
+            if UpdateChecker.shared.isGitHubRelease {
+                return SettingsWindowLayout.aboutContentHeightWithChannelSelector
+            }
+            #endif
+            return SettingsWindowLayout.aboutContentHeight
+        }
+    }
+
     var body: some View {
         TabView(selection: $selectedTab) {
             GeneralSettingsView(
@@ -129,13 +156,21 @@ struct SettingsWindowView: View {
             updateTabScrollIndicator(for: newValue, animated: true)
             resizeWindow(for: newValue, animated: true)
         }
+        #if DEBUG
+        .onChange(of: model.settings.debugShowChannelSelector) { _ in
+            // When debugShowChannelSelector changes, resize window if on About tab
+            if selectedTab == .about {
+                resizeWindowWithCurrentHeight(animated: true)
+            }
+        }
+        #endif
         .onDisappear {
             scrollIndicatorResetWorkItem?.cancel()
         }
         .id(languageRefreshToken)
         .frame(
-            width: SettingsWindowLayout.contentWidth(for: selectedTab),
-            height: SettingsWindowLayout.contentHeight(for: selectedTab)
+            width: currentContentWidth,
+            height: currentContentHeight
         )
         .padding(SettingsWindowLayout.outerPadding)
     }
@@ -144,6 +179,36 @@ struct SettingsWindowView: View {
         guard let window else { return }
 
         let targetContentSize = SettingsWindowLayout.windowContentSize(for: tab)
+        var targetFrame = window.frameRect(
+            forContentRect: NSRect(origin: .zero, size: targetContentSize)
+        )
+        let currentFrame = window.frame
+
+        // Center horizontally when width changes
+        targetFrame.origin.x = currentFrame.midX - targetFrame.width / 2
+        // Anchor to top edge
+        targetFrame.origin.y = currentFrame.maxY - targetFrame.height
+
+        if animated {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = SettingsWindowLayout.animationDuration
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                context.allowsImplicitAnimation = true
+                window.animator().setFrame(targetFrame, display: true)
+            }
+        } else {
+            window.setFrame(targetFrame, display: true)
+        }
+    }
+
+    private func resizeWindowWithCurrentHeight(animated: Bool) {
+        guard let window else { return }
+
+        // Calculate target size using current dynamic height
+        let targetContentSize = CGSize(
+            width: currentContentWidth + (SettingsWindowLayout.outerPadding * 2),
+            height: currentContentHeight + (SettingsWindowLayout.outerPadding * 2)
+        )
         var targetFrame = window.frameRect(
             forContentRect: NSRect(origin: .zero, size: targetContentSize)
         )
