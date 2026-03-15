@@ -7,6 +7,15 @@
         <language>en</language>
         <sparkle:edPublicKey>OJo/oEqSjtmok1HYx+XgFHLq1FkUAJs8hsDms0+Uv98=</sparkle:edPublicKey>
         <item>
+            <title>Version 1.3.4-beta.3</title>
+            <pubDate>Sun, 15 Mar 2026 05:51:45 +0000</pubDate>
+            <sparkle:version>13403</sparkle:version>
+            <sparkle:shortVersionString>1.3.4-beta.3</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description>&lt;h2&gt;SnapTra Translator 1.3.4-beta.3&lt;/h2&gt;&lt;h4&gt;Added&lt;/h4&gt;&lt;ul&gt;&lt;li&gt;Add debug toggle for GitHub release channel selector in menu bar for testing&lt;/li&gt;&lt;/ul&gt;&lt;h4&gt;Fixed&lt;/h4&gt;&lt;ul&gt;&lt;li&gt;Make update channel selector toggle work in real-time without restart&lt;/li&gt;&lt;li&gt;Relax OCR selection and merge split lines in paragraph mode&lt;/li&gt;&lt;li&gt;Size paragraph text from actual panel width&lt;/li&gt;&lt;li&gt;Only show update channel options for GitHub releases&lt;/li&gt;&lt;li&gt;Move debug OCR option and auto-disable on sentence translation&lt;/li&gt;&lt;li&gt;Prevent panel from showing without screen recording permission&lt;/li&gt;&lt;li&gt;Increase about page height for GitHub releases&lt;/li&gt;&lt;/ul&gt;</description>
+            <enclosure url="https://github.com/yelog/SnapTraTranslator/releases/download/v1.3.4-beta.3/SnapTra-Translator-1.3.4-beta.3.dmg" length="5021006" type="application/octet-stream" sparkle:edSignature="Ag4Vsng7wA9lSUAtv4aV1I24JXWuRzWe4dozkkmjreUfzYE8Be17v89UGumfkSmg4iCdgX08ji/5d5HDkhbnDA==" />
+        </item>
+        <item>
             <title>Version 1.3.4-beta.2</title>
             <pubDate>Sat, 14 Mar 2026 05:28:46 +0000</pubDate>
             <sparkle:version>13402</sparkle:version>
