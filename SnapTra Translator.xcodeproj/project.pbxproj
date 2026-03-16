@@ -34,10 +34,10 @@
 		CA9FDDCF14665092D5945F0C /* SnapTra TranslatorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "SnapTra TranslatorTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		D0878597B29F37191DDAD9BF /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/Cocoa.framework; sourceTree = DEVELOPER_DIR; };
 		D3F4D8FE2F14D1A2004035A9 /* SnapTra Translator.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "SnapTra Translator.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		E1D111111111111111111111 /* SnapTra Translator Direct.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = "SnapTra Translator Direct.app"; path = "SnapTra Translator.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E1B111111111111111111111 /* HotkeyManagerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HotkeyManagerTests.swift; sourceTree = "<group>"; };
 		E1B222222222222222222222 /* OCRParagraphGroupingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OCRParagraphGroupingTests.swift; sourceTree = "<group>"; };
 		E1B333333333333333333333 /* ParagraphOverlayLayoutTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ParagraphOverlayLayoutTests.swift; sourceTree = "<group>"; };
+		E1D111111111111111111111 /* SnapTra Translator Direct.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = "SnapTra Translator Direct.app"; path = "SnapTra Translator.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -46,8 +46,6 @@
 			membershipExceptions = (
 				"Info-AppStore.plist",
 				"Info-Direct.plist",
-				"SnapTra AppStore.entitlements",
-				"SnapTra Direct.entitlements",
 			);
 			target = D3F4D8FD2F14D1A2004035A9 /* SnapTra Translator */;
 		};
@@ -56,8 +54,6 @@
 			membershipExceptions = (
 				"Info-AppStore.plist",
 				"Info-Direct.plist",
-				"SnapTra AppStore.entitlements",
-				"SnapTra Direct.entitlements",
 			);
 			target = E1D555555555555555555555 /* SnapTra Translator Direct */;
 		};
@@ -502,7 +498,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.3.5-beta.1;
+				MARKETING_VERSION = "1.3.5-beta.1";
 				PRODUCT_BUNDLE_IDENTIFIER = org.yelog.SnapTraTranslate;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -542,7 +538,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.3.5-beta.1;
+				MARKETING_VERSION = "1.3.5-beta.1";
 				PRODUCT_BUNDLE_IDENTIFIER = org.yelog.SnapTraTranslate;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -582,7 +578,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.3.5-beta.1;
+				MARKETING_VERSION = "1.3.5-beta.1";
 				PRODUCT_BUNDLE_IDENTIFIER = org.yelog.SnapTraTranslate;
 				PRODUCT_NAME = "SnapTra Translator";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -623,7 +619,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.3.5-beta.1;
+				MARKETING_VERSION = "1.3.5-beta.1";
 				PRODUCT_BUNDLE_IDENTIFIER = org.yelog.SnapTraTranslate;
 				PRODUCT_NAME = "SnapTra Translator";
 				PROVISIONING_PROFILE_SPECIFIER = "";

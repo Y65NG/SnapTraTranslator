@@ -299,11 +299,7 @@ final class SettingsStore: ObservableObject {
     }
 
     static func migrateDictionarySources(_ sources: [DictionarySource]) -> [DictionarySource] {
-        let hiddenTypes: Set<DictionarySource.SourceType> = [.google, .bing, .youdao, .deepl]
-
-        let filtered = sources.filter { !hiddenTypes.contains($0.type) }
-
-        let migrated: [DictionarySource] = filtered.map {
+        sources.map {
             DictionarySource(
                 id: $0.id,
                 name: $0.type.displayName,
@@ -311,8 +307,6 @@ final class SettingsStore: ObservableObject {
                 isEnabled: $0.isEnabled
             )
         }
-
-        return migrated
     }
 
     private static func defaultDictionarySources() -> [DictionarySource] {

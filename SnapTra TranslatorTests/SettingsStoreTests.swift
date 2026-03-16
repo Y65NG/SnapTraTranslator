@@ -33,12 +33,10 @@ final class SettingsStoreMigrationTests: XCTestCase {
         XCTAssertTrue(sources.contains { $0.type == .system && $0.isEnabled })
     }
 
-    func testMigrationRemovesHiddenProviders() {
+    func testMigrationPreservesSources() {
         let existing: [DictionarySource] = [
             DictionarySource(id: UUID(), name: "System Dictionary", type: .system, isEnabled: true),
-            DictionarySource(id: UUID(), name: "Advanced Dictionary", type: .ecdict, isEnabled: true),
-            DictionarySource(id: UUID(), name: "Google Translate", type: .google, isEnabled: false),
-            DictionarySource(id: UUID(), name: "Bing Dictionary", type: .bing, isEnabled: true),
+            DictionarySource(id: UUID(), name: "Advanced Dictionary", type: .ecdict, isEnabled: false),
         ]
         let migrated = SettingsStore.migrateDictionarySources(existing)
 
@@ -46,9 +44,7 @@ final class SettingsStoreMigrationTests: XCTestCase {
             migrated.map(\.type),
             [.system, .ecdict]
         )
-        XCTAssertEqual(
-            migrated.filter(\.isEnabled).map(\.type),
-            [.system, .ecdict]
-        )
+        XCTAssertTrue(migrated[0].isEnabled)
+        XCTAssertFalse(migrated[1].isEnabled)
     }
 }

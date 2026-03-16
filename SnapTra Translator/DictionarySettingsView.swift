@@ -160,12 +160,8 @@ struct DictionarySource: Identifiable, Codable, Equatable {
     }
 
     enum SourceType: String, Codable {
-        case system    // macOS system dictionary
-        case ecdict    // ECDICT offline dictionary
-        case google
-        case bing
-        case youdao
-        case deepl
+        case system
+        case ecdict
     }
 
     var displayName: String {
@@ -180,14 +176,6 @@ extension DictionarySource.SourceType {
             return L("Advanced Dictionary")
         case .system:
             return L("System Dictionary")
-        case .google:
-            return L("Google Translate")
-        case .bing:
-            return L("Bing Dictionary")
-        case .youdao:
-            return L("Youdao Dictionary")
-        case .deepl:
-            return L("DeepL Translate")
         }
     }
 
@@ -197,28 +185,11 @@ extension DictionarySource.SourceType {
             return L("Advanced offline dictionary")
         case .system:
             return L("macOS built-in dictionary")
-        case .google:
-            return L("Google web translation")
-        case .bing:
-            return L("Bing web dictionary")
-        case .youdao:
-            return L("Youdao web dictionary")
-        case .deepl:
-            return L("DeepL web translation")
         }
     }
 
     var needsDownloadManagement: Bool {
         self == .ecdict
-    }
-
-    var isOnline: Bool {
-        switch self {
-        case .google, .bing, .youdao, .deepl:
-            return true
-        case .system, .ecdict:
-            return false
-        }
     }
 }
 
@@ -612,7 +583,7 @@ struct DictionarySettingsView: View {
         switch type {
         case .ecdict:
             return convertState(model.dictionaryDownload.state)
-        case .system, .google, .bing, .youdao, .deepl:
+        case .system:
             return nil
         }
     }
@@ -631,7 +602,7 @@ struct DictionarySettingsView: View {
         switch type {
         case .ecdict:
             model.dictionaryDownload.startDownload()
-        case .system, .google, .bing, .youdao, .deepl:
+        case .system:
             break
         }
     }
@@ -640,7 +611,7 @@ struct DictionarySettingsView: View {
         switch type {
         case .ecdict:
             model.dictionaryDownload.cancelDownload()
-        case .system, .google, .bing, .youdao, .deepl:
+        case .system:
             break
         }
     }
@@ -649,7 +620,7 @@ struct DictionarySettingsView: View {
         switch type {
         case .ecdict:
             model.dictionaryDownload.delete()
-        case .system, .google, .bing, .youdao, .deepl:
+        case .system:
             break
         }
     }
@@ -658,7 +629,7 @@ struct DictionarySettingsView: View {
         switch type {
         case .ecdict:
             model.dictionaryDownload.retry()
-        case .system, .google, .bing, .youdao, .deepl:
+        case .system:
             break
         }
     }
@@ -992,22 +963,6 @@ struct IntegratedDictionaryRow: View {
             Image(systemName: "text.book.closed")
                 .font(.system(size: 16))
                 .foregroundStyle(.secondary)
-        case .google:
-            Image("TTSGoogle")
-                .resizable()
-                .interpolation(.high)
-        case .bing:
-            Image("TTSBing")
-                .resizable()
-                .interpolation(.high)
-        case .youdao:
-            Image("TTSYoudao")
-                .resizable()
-                .interpolation(.high)
-        case .deepl:
-            Image(systemName: "diamond.fill")
-                .font(.system(size: 15))
-                .foregroundStyle(Color(red: 0.05, green: 0.24, blue: 0.63))
         }
     }
 

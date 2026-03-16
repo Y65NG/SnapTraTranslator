@@ -5,9 +5,6 @@ final class DictionaryService {
     /// Offline ECDICT database. Exposed so AppModel can pass it to DictionaryDownloadManager.
     let offlineService = OfflineDictionaryService()
 
-    /// Web dictionary providers used for lightweight word translations.
-    private let onlineService = OnlineDictionaryService()
-
     /// Performs a lookup using the provided dictionary sources in priority order.
     /// - Parameters:
     ///   - word: The word to look up
@@ -32,12 +29,14 @@ final class DictionaryService {
         return nil
     }
 
-    /// Queries all enabled dictionary sources and returns all matching entries.
+    /// Queries a single dictionary source and returns the matching entry.
     /// - Parameters:
     ///   - word: The word to look up
-    ///   - sources: Array of dictionary sources to query
+    ///   - source: Dictionary source to query
+    ///   - sourceLanguage: Source language code (unused, kept for API compatibility)
+    ///   - targetLanguage: Target language code (unused, kept for API compatibility)
     ///   - preferEnglish: Whether to prefer English definitions
-    /// - Returns: Array of matching dictionary entries from all enabled sources
+    /// - Returns: Dictionary entry, or nil if not found
     func lookupSingle(
         _ word: String,
         source: DictionarySource,
@@ -46,15 +45,6 @@ final class DictionaryService {
         preferEnglish: Bool = false
     ) async -> DictionaryEntry? {
         guard source.isEnabled, let normalized = normalizeWord(word) else { return nil }
-
-        if source.type.isOnline {
-            return await onlineService.lookup(
-                normalized,
-                provider: source.type,
-                sourceLanguage: sourceLanguage,
-                targetLanguage: targetLanguage
-            )
-        }
 
         return Self.lookupFromLocalSource(
             source,
@@ -112,7 +102,6 @@ final class DictionaryService {
         switch source.type {
         case .ecdict:
             guard let entry = offlineService.lookup(word) else { return nil }
-            // Return entry with source information
             return DictionaryEntry(
                 word: entry.word,
                 phonetic: entry.phonetic,
@@ -122,8 +111,6 @@ final class DictionaryService {
             )
         case .system:
             return lookupFromSystemDictionary(word: word, preferEnglish: preferEnglish)
-        case .google, .bing, .youdao, .deepl:
-            return nil
         }
     }
 
