@@ -355,13 +355,54 @@ final class DictionaryService {
 
         for pattern in patterns {
             if let match = matchFirst(pattern: pattern, in: html) {
-                let cleaned = match.trimmingCharacters(in: .whitespacesAndNewlines)
+                var cleaned = match.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !cleaned.isEmpty {
+                    // 验证是否为有效音标（包含 IPA 字符、BrE/AmE 标记或斜杠包裹）
+                    guard isValidPhonetic(cleaned) else { continue }
+                    
+                    // 如果包含 BrE/AmE，只保留 AmE 后的音标
+                    if cleaned.contains("BrE") && cleaned.contains("AmE") {
+                        if let ameRange = cleaned.range(of: "AmE\\s*", options: .regularExpression) {
+                            cleaned = String(cleaned[ameRange.upperBound...])
+                                .components(separatedBy: ",")
+                                .first?
+                                .trimmingCharacters(in: .whitespacesAndNewlines) ?? cleaned
+                        }
+                    }
                     return cleaned
                 }
             }
         }
         return nil
+    }
+    
+    /// 验证字符串是否为有效音标
+    private static func isValidPhonetic(_ text: String) -> Bool {
+        // 包含 BrE/AmE 标记
+        if text.contains("BrE") || text.contains("AmE") {
+            return true
+        }
+        
+        // 包含 IPA 音标特有字符
+        let ipaCharacters = CharacterSet(charactersIn: "əɪʃŋðθʌɔɛʊɑæɜˈˌːˑᵊ")
+        if text.unicodeScalars.contains(where: { ipaCharacters.contains($0) }) {
+            return true
+        }
+        
+        // 被斜杠或方括号包裹（标准 IPA 格式）
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if (trimmed.hasPrefix("/") && trimmed.hasSuffix("/")) ||
+           (trimmed.hasPrefix("[") && trimmed.hasSuffix("]")) {
+            return true
+        }
+        
+        // 不包含中文汉字（排除中文释义被误判）
+        let containsChinese = text.range(of: "\\p{Han}", options: .regularExpression) != nil
+        if containsChinese {
+            return false
+        }
+        
+        return true
     }
 
     // MARK: - Definition Extraction

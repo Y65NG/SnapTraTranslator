@@ -766,6 +766,7 @@ struct OverlayView: View {
         if #available(macOS 15.0, *) {
             let targetIsEnglish = model.settings.targetLanguage.hasPrefix("en")
             let shouldHideReadyTranslation = targetIsEnglish && !content.definitions.isEmpty
+            let usesCompactStyle = content.usesCompactPrimaryTranslationStyle
 
             VStack(alignment: .leading, spacing: 0) {
                 switch content.primaryTranslationState {
@@ -786,7 +787,7 @@ struct OverlayView: View {
                 case .ready(let translation, _):
                     if !shouldHideReadyTranslation {
                         HStack(spacing: 8) {
-                            if !content.definitions.isEmpty {
+                            if usesCompactStyle {
                                 Text(translation)
                                     .font(.system(size: 17, weight: .medium, design: .rounded))
                                     .foregroundStyle(
@@ -823,7 +824,7 @@ struct OverlayView: View {
                             Spacer()
                         }
                         .padding(.horizontal, 18)
-                        .padding(.bottom, content.definitions.isEmpty ? 16 : 8)
+                        .padding(.bottom, usesCompactStyle ? 8 : 16)
                     }
 
                 case .empty:

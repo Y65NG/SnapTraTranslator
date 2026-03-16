@@ -9,17 +9,20 @@ struct OverlayContent: Equatable {
     var word: String
     var phonetic: String?
     var primaryTranslationState: OverlayPrimaryTranslationState
+    var usesCompactPrimaryTranslationStyle: Bool
     var dictionarySections: [OverlayDictionarySection]
 
     init(
         word: String,
         phonetic: String?,
         primaryTranslationState: OverlayPrimaryTranslationState,
+        usesCompactPrimaryTranslationStyle: Bool,
         dictionarySections: [OverlayDictionarySection] = []
     ) {
         self.word = word
         self.phonetic = phonetic
         self.primaryTranslationState = primaryTranslationState
+        self.usesCompactPrimaryTranslationStyle = usesCompactPrimaryTranslationStyle
         self.dictionarySections = dictionarySections
     }
 
@@ -700,13 +703,16 @@ final class AppModel: ObservableObject {
         sources: [DictionarySource],
         primaryTranslationState: OverlayPrimaryTranslationState
     ) -> OverlayContent {
-        OverlayContent(
+        let enabledSources = sources.filter(\.isEnabled)
+
+        return OverlayContent(
             word: word,
             phonetic: nil,
             primaryTranslationState: primaryTranslationState,
-            dictionarySections: sources
-                .filter(\.isEnabled)
-                .map { OverlayDictionarySection(sourceType: $0.type, state: .loading) }
+            usesCompactPrimaryTranslationStyle: !enabledSources.isEmpty,
+            dictionarySections: enabledSources.map {
+                OverlayDictionarySection(sourceType: $0.type, state: .loading)
+            }
         )
     }
 
