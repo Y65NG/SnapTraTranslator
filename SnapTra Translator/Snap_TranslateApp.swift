@@ -259,15 +259,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         aboutItem.target = self
         menu.addItem(aboutItem)
 
-        // Check for Updates
-        let checkUpdatesItem = NSMenuItem(
-            title: L("Check for Updates..."),
-            action: #selector(checkForUpdates),
-            keyEquivalent: ""
-        )
-        checkUpdatesItem.target = self
-        menu.addItem(checkUpdatesItem)
-
         #if DEBUG
         // Debug section
         menu.addItem(.separator())
@@ -373,10 +364,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     @MainActor @objc private func toggleContinuousTranslation() {
         model.settings.continuousTranslation.toggle()
-    }
-
-    @objc private func checkForUpdates() {
-        UpdateChecker.shared.checkForUpdatesWithUI()
     }
 
     @objc private func quitApp() {
