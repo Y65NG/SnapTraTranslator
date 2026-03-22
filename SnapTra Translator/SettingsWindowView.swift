@@ -628,6 +628,7 @@ struct GeneralTranslationLanguageRow: View {
     @Binding var sourceLanguage: String
     @EnvironmentObject var model: AppModel
     @State private var showingUnavailableAlert = false
+    @State private var unavailableAlertTitle = ""
     @State private var missingLanguagesMessage = ""
 
     private let commonLanguages: [(id: String, name: String)] = [
@@ -667,21 +668,24 @@ struct GeneralTranslationLanguageRow: View {
             .tint(.accentColor)
             .onChange(of: targetLanguage) { _, newValue in
                 Task { @MainActor in
-                    let status = await model.languagePackManager?.checkLanguagePair(
+                    let status = await model.refreshLanguageAvailabilityStatus(
                         from: sourceLanguage,
-                        to: newValue
+                        to: newValue,
+                        showLoading: true
                     )
                     if status != .installed {
-                        checkLanguageAvailability(newValue)
+                        presentLanguageAvailabilityAlert(for: newValue)
                     }
                 }
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .alert(L("Language Pack Required"), isPresented: $showingUnavailableAlert) {
-            Button(L("Open Settings")) {
-                model.languagePackManager?.openTranslationSettings()
+        .alert(unavailableAlertTitle, isPresented: $showingUnavailableAlert) {
+            if shouldOfferTranslationSettingsLink {
+                Button(L("Open Settings")) {
+                    model.languagePackManager?.openTranslationSettings()
+                }
             }
             Button(L("Cancel"), role: .cancel) { }
         } message: {
@@ -689,13 +693,10 @@ struct GeneralTranslationLanguageRow: View {
         }
         .onAppear {
             Task { @MainActor in
-                let status = await model.languagePackManager?.checkLanguagePair(
+                _ = await model.refreshLanguageAvailabilityStatus(
                     from: sourceLanguage,
                     to: targetLanguage
                 )
-                if status != .installed {
-                    checkLanguageAvailability(targetLanguage)
-                }
             }
         }
     }
@@ -720,12 +721,13 @@ struct GeneralTranslationLanguageRow: View {
         } else if let status = status {
             Button {
                 Task { @MainActor in
-                    let newStatus = await model.languagePackManager?.checkLanguagePair(
+                    let newStatus = await model.refreshLanguageAvailabilityStatus(
                         from: sourceLanguage,
-                        to: targetLanguage
+                        to: targetLanguage,
+                        showLoading: true
                     )
                     if newStatus != .installed {
-                        checkLanguageAvailability(targetLanguage)
+                        presentLanguageAvailabilityAlert(for: targetLanguage)
                     }
                 }
             } label: {
@@ -734,9 +736,7 @@ struct GeneralTranslationLanguageRow: View {
                     .foregroundStyle(status == .installed ? .green : .red)
             }
             .buttonStyle(.plain)
-            .help(status == .installed
-                  ? L("Language pack installed")
-                  : L("Language pack required - click to download"))
+            .help(languagePackHelpText(for: status))
         }
     }
 
@@ -749,13 +749,42 @@ struct GeneralTranslationLanguageRow: View {
         commonLanguages.first(where: { $0.id == id })?.name ?? id
     }
 
-    private func checkLanguageAvailability(_ language: String) {
+    private func languagePackHelpText(for status: LanguageAvailability.Status) -> String {
+        switch status {
+        case .installed:
+            return L("Language pack installed")
+        case .supported:
+            return L("Language pack required - click to download")
+        case .unsupported:
+            return L("Translation not supported for this language pair.")
+        @unknown default:
+            return L("Translation not supported for this language pair.")
+        }
+    }
+
+    private var shouldOfferTranslationSettingsLink: Bool {
+        guard let status = getLanguagePackStatus(targetLanguage) else { return false }
+        return status == .supported
+    }
+
+    private func presentLanguageAvailabilityAlert(for language: String) {
         guard let status = getLanguagePackStatus(language) else { return }
 
+        unavailableAlertTitle = L("Language Pack Required")
         if status != .installed {
             let sourceName = languageName(for: sourceLanguage)
             let targetName = languageName(for: language)
-            missingLanguagesMessage = L("The language pack for \(sourceName) → \(targetName) translation is not installed. Please download the required language packs in System Settings > General > Language & Region > Translation Languages.")
+
+            switch status {
+            case .installed:
+                return
+            case .supported:
+                missingLanguagesMessage = L("The language pack for \(sourceName) → \(targetName) translation is not installed. Please download the required language packs in System Settings > General > Language & Region > Translation Languages.")
+            case .unsupported:
+                missingLanguagesMessage = L("Translation not supported for this language pair.")
+            @unknown default:
+                missingLanguagesMessage = L("Translation not supported for this language pair.")
+            }
             showingUnavailableAlert = true
         }
     }

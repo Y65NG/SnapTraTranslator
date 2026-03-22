@@ -26,8 +26,15 @@ enum DistributionChannel {
 final class UpdateChecker: NSObject, ObservableObject {
     static let shared = UpdateChecker()
 
+    enum CheckTrigger {
+        case none
+        case automaticSilent
+        case userInitiated
+    }
+
     let checkInterval: TimeInterval = 24 * 60 * 60
     let checkTimeout: TimeInterval = 60
+    let silentRetryDelay: TimeInterval = 5 * 60
 
     @Published var isCheckingForUpdates = false
 
@@ -106,6 +113,8 @@ extension UpdateChecker: SPUUpdaterDelegate {
         static var updaterController: SPUStandardUpdaterController?
         static var autoCheckTimer: Timer?
         static var checkTimeoutTimer: Timer?
+        static var pendingSilentRetryWorkItem: DispatchWorkItem?
+        static var activeCheckTrigger: CheckTrigger = .none
     }
 
     func initialize() {
@@ -143,9 +152,7 @@ extension UpdateChecker: SPUUpdaterDelegate {
         guard isGitHubRelease else { return }
         guard SettingsStore.shared.autoCheckUpdates else { return }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
-            self?.checkForUpdates(silent: true)
-        }
+        scheduleSilentAutoCheck(after: 5)
 
         SparkleState.autoCheckTimer = Timer.scheduledTimer(withTimeInterval: checkInterval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
@@ -156,13 +163,14 @@ extension UpdateChecker: SPUUpdaterDelegate {
     }
 
     func checkForUpdates(silent: Bool = false) {
-        guard !isCheckingForUpdates || silent else {
+        guard SparkleState.activeCheckTrigger == .none else {
             print("[UpdateChecker] Update check already in progress, skipping")
             return
         }
 
         if isGitHubRelease {
             if let controller = SparkleState.updaterController {
+                SparkleState.activeCheckTrigger = silent ? .automaticSilent : .userInitiated
                 if silent {
                     controller.updater.checkForUpdatesInBackground()
                 } else {
@@ -179,13 +187,14 @@ extension UpdateChecker: SPUUpdaterDelegate {
     }
 
     func checkForUpdatesWithUI() {
-        guard !isCheckingForUpdates else {
+        guard SparkleState.activeCheckTrigger == .none else {
             print("[UpdateChecker] Update check already in progress, skipping")
             return
         }
 
         if isGitHubRelease {
             if let controller = SparkleState.updaterController {
+                SparkleState.activeCheckTrigger = .userInitiated
                 startUpdateCheck()
                 controller.checkForUpdates(nil)
             } else {
@@ -212,6 +221,20 @@ extension UpdateChecker: SPUUpdaterDelegate {
         isCheckingForUpdates = false
         SparkleState.checkTimeoutTimer?.invalidate()
         SparkleState.checkTimeoutTimer = nil
+        SparkleState.activeCheckTrigger = .none
+    }
+
+    private func scheduleSilentAutoCheck(after delay: TimeInterval) {
+        SparkleState.pendingSilentRetryWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            guard SettingsStore.shared.autoCheckUpdates, self.isGitHubRelease else { return }
+            self.checkForUpdates(silent: true)
+        }
+
+        SparkleState.pendingSilentRetryWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
     func feedURLString(for updater: SPUUpdater) -> String? {
@@ -240,6 +263,7 @@ extension UpdateChecker: SPUUpdaterDelegate {
     }
 
     func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
+        let trigger = SparkleState.activeCheckTrigger
         print("[UpdateChecker] Update aborted with error: \(error.localizedDescription)")
         resetUpdateCheckState()
 
@@ -255,6 +279,12 @@ extension UpdateChecker: SPUUpdaterDelegate {
             default:
                 break
             }
+        }
+
+        guard trigger == .userInitiated else {
+            print("[UpdateChecker] Silent update check failed, retrying in \(Int(silentRetryDelay)) seconds")
+            scheduleSilentAutoCheck(after: silentRetryDelay)
+            return
         }
 
         DispatchQueue.main.async {
