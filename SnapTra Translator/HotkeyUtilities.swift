@@ -62,33 +62,33 @@ enum HotkeyModifiers {
 }
 
 enum SingleKeyMapping {
-    static func keyCode(for key: SingleKey) -> CGKeyCode {
+    static func keyCodes(for key: SingleKey) -> Set<CGKeyCode> {
         switch key {
-        case .leftShift: return 56
-        case .rightShift: return 60
-        case .leftControl: return 59
-        case .rightControl: return 62
-        case .leftOption: return 58
-        case .rightOption: return 61
-        case .leftCommand: return 55
-        case .rightCommand: return 54
-        case .fn: return 63
+        case .shift: return [56, 60]
+        case .control: return [59, 62]
+        case .option: return [58, 61]
+        case .command: return [55, 54]
+        case .fn: return [63]
         }
     }
 
     static func modifierFlag(for key: SingleKey) -> NSEvent.ModifierFlags {
         switch key {
-        case .leftShift, .rightShift:
+        case .shift:
             return .shift
-        case .leftControl, .rightControl:
+        case .control:
             return .control
-        case .leftOption, .rightOption:
+        case .option:
             return .option
-        case .leftCommand, .rightCommand:
+        case .command:
             return .command
         case .fn:
             return .function
         }
+    }
+
+    static func matches(keyCode: CGKeyCode, for key: SingleKey) -> Bool {
+        keyCodes(for: key).contains(keyCode)
     }
 }
 

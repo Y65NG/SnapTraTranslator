@@ -2,6 +2,21 @@ import XCTest
 @testable import SnapTra_Translator
 
 final class HotkeyManagerTests: XCTestCase {
+    func testCommandHotkeyMatchesBothPhysicalCommandKeys() {
+        XCTAssertTrue(SingleKeyMapping.matches(keyCode: 54, for: .command))
+        XCTAssertTrue(SingleKeyMapping.matches(keyCode: 55, for: .command))
+    }
+
+    func testOptionHotkeyMatchesBothPhysicalOptionKeys() {
+        XCTAssertTrue(SingleKeyMapping.matches(keyCode: 58, for: .option))
+        XCTAssertTrue(SingleKeyMapping.matches(keyCode: 61, for: .option))
+    }
+
+    func testGenericModifierHotkeyRejectsDifferentModifierKeyCode() {
+        XCTAssertFalse(SingleKeyMapping.matches(keyCode: 58, for: .command))
+        XCTAssertFalse(SingleKeyMapping.matches(keyCode: 55, for: .option))
+    }
+
     func testFirstPressTriggersImmediately() {
         var stateMachine = HotkeyGestureStateMachine()
 

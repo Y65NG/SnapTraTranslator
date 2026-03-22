@@ -157,8 +157,7 @@ final class HotkeyManager {
         guard let key = activeSingleKey else {
             return
         }
-        let keyCode = Int64(event.keyCode)
-        let expectedKeyCode = Int64(SingleKeyMapping.keyCode(for: key))
+        let keyCode = event.keyCode
 
         let targetFlag = SingleKeyMapping.modifierFlag(for: key)
         let eventFlags = event.modifierFlags
@@ -171,7 +170,7 @@ final class HotkeyManager {
         }
 
         if isTargetFlagPresent && !gestureStateMachine.isSingleKeyDown {
-            guard keyCode == expectedKeyCode else {
+            guard SingleKeyMapping.matches(keyCode: keyCode, for: key) else {
                 return
             }
             let relevantFlags: NSEvent.ModifierFlags = [.shift, .control, .option, .command]

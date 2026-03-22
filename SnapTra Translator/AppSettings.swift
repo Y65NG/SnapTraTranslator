@@ -1,38 +1,43 @@
 import Foundation
 
 enum SingleKey: String, CaseIterable, Identifiable {
-    case leftShift
-    case leftControl
-    case leftOption
-    case leftCommand
-    case rightShift
-    case rightControl
-    case rightOption
-    case rightCommand
+    case shift
+    case control
+    case option
+    case command
     case fn
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .leftShift:
-            return L("Left Shift")
-        case .leftControl:
-            return L("Left Control")
-        case .leftOption:
-            return L("Left Option")
-        case .leftCommand:
-            return L("Left Command")
-        case .rightShift:
-            return L("Right Shift")
-        case .rightControl:
-            return L("Right Control")
-        case .rightOption:
-            return L("Right Option")
-        case .rightCommand:
-            return L("Right Command")
+        case .shift:
+            return L("Shift")
+        case .control:
+            return L("Control")
+        case .option:
+            return L("Option")
+        case .command:
+            return L("Command")
         case .fn:
             return "Fn"
+        }
+    }
+
+    static func migrated(from storedValue: String?) -> SingleKey {
+        switch storedValue {
+        case Self.shift.rawValue, "leftShift", "rightShift":
+            return .shift
+        case Self.control.rawValue, "leftControl", "rightControl", nil:
+            return .control
+        case Self.option.rawValue, "leftOption", "rightOption":
+            return .option
+        case Self.command.rawValue, "leftCommand", "rightCommand":
+            return .command
+        case Self.fn.rawValue:
+            return .fn
+        default:
+            return .control
         }
     }
 }

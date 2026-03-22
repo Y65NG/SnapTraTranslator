@@ -23,6 +23,26 @@ final class LookupLanguagePairTests: XCTestCase {
 
 @MainActor
 final class SettingsStoreMigrationTests: XCTestCase {
+    func testSingleKeyMigrationMapsLegacyLeftAndRightValuesToGenericModifier() {
+        XCTAssertEqual(SingleKey.migrated(from: "leftCommand"), .command)
+        XCTAssertEqual(SingleKey.migrated(from: "rightCommand"), .command)
+        XCTAssertEqual(SingleKey.migrated(from: "leftOption"), .option)
+        XCTAssertEqual(SingleKey.migrated(from: "rightControl"), .control)
+        XCTAssertEqual(SingleKey.migrated(from: "leftShift"), .shift)
+    }
+
+    func testSettingsStorePersistsMigratedSingleKeyValue() {
+        let suiteName = "SettingsStoreMigrationTests.\(#function)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults.set("rightCommand", forKey: AppSettingKey.singleKey)
+
+        let store = SettingsStore(defaults: defaults, loginItemStatus: false)
+
+        XCTAssertEqual(store.singleKey, .command)
+        XCTAssertEqual(defaults.string(forKey: AppSettingKey.singleKey), SingleKey.command.rawValue)
+    }
+
     func testDefaultDictionarySources() {
         let sources = SettingsStore.defaultDictionarySources(ecdictInstalled: false)
 

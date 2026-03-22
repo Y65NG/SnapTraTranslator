@@ -337,12 +337,12 @@ final class OverlayWindowController: NSWindowController {
     private let paragraphFrameAnimationDuration: TimeInterval = 0.18
     private let paragraphFrameAnimationStepNanoseconds: UInt64 = 16_666_667
 
-    init(model: AppModel) {
+    init(model: AppModel, panel: NSPanel? = nil) {
         self.model = model
         let initialRootView = AnyView(OverlayView().environmentObject(model))
         hostingView = NSHostingView(rootView: initialRootView)
         measurementHostingView = NSHostingView(rootView: initialRootView)
-        let panel = OverlayPanel(
+        let panel = panel ?? OverlayPanel(
             contentRect: CGRect(x: 0, y: 0, width: 380, height: 200),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
@@ -382,12 +382,13 @@ final class OverlayWindowController: NSWindowController {
         if !window.isVisible {
             cancelParagraphFrameAnimation()
             window.setFrame(targetFrame, display: true)
-            window.orderFrontRegardless()
-            if makeKey {
-                window.makeKey()
-            }
         } else {
             applyFrameIfNeeded(targetFrame)
+        }
+
+        window.orderFrontRegardless()
+        if makeKey {
+            window.makeKey()
         }
     }
 

@@ -216,30 +216,16 @@ struct HotkeyKeycapSelector: View {
     var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
-                button(for: SingleKey.leftShift)
-
                 Text(L("Hotkey"))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.primary)
-                    .frame(maxWidth: .infinity)
-
-                button(for: SingleKey.rightShift)
-            }
-
-            HStack(spacing: 8) {
+                Spacer()
                 HStack(spacing: 6) {
-                    button(for: SingleKey.fn)
-                    button(for: SingleKey.leftControl)
-                    button(for: SingleKey.leftOption)
-                    button(for: SingleKey.leftCommand)
-                }
-
-                Spacer(minLength: 8)
-
-                HStack(spacing: 6) {
-                    button(for: SingleKey.rightCommand)
-                    button(for: SingleKey.rightOption)
-                    button(for: SingleKey.rightControl)
+                    button(for: .shift)
+                    button(for: .fn)
+                    button(for: .control)
+                    button(for: .option)
+                    button(for: .command)
                 }
             }
         }
@@ -261,13 +247,13 @@ struct HotkeyKeycapSelector: View {
 
     private func symbol(for key: SingleKey) -> String {
         switch key {
-        case .leftShift, .rightShift:
+        case .shift:
             return "⇧"
-        case .leftControl, .rightControl:
+        case .control:
             return "⌃"
-        case .leftOption, .rightOption:
+        case .option:
             return "⌥"
-        case .leftCommand, .rightCommand:
+        case .command:
             return "⌘"
         case .fn:
             return "Fn"
@@ -276,22 +262,14 @@ struct HotkeyKeycapSelector: View {
 
     private func tooltip(for key: SingleKey) -> String {
         switch key {
-        case .leftShift:
-            return L("Left Shift")
-        case .rightShift:
-            return L("Right Shift")
-        case .leftControl:
-            return L("Left Control")
-        case .rightControl:
-            return L("Right Control")
-        case .leftOption:
-            return L("Left Option")
-        case .rightOption:
-            return L("Right Option")
-        case .leftCommand:
-            return L("Left Command")
-        case .rightCommand:
-            return L("Right Command")
+        case .shift:
+            return L("Shift")
+        case .control:
+            return L("Control")
+        case .option:
+            return L("Option")
+        case .command:
+            return L("Command")
         case .fn:
             return "Fn"
         }
