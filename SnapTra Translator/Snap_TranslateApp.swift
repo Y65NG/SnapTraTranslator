@@ -66,10 +66,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
         if #available(macOS 15.0, *) {
             createTranslationServiceWindow(model: model)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-                guard let self else { return }
-                warmupServices(model: self.model)
-            }
         }
 
         model.permissions.$status
@@ -140,6 +136,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
         Task {
             await refreshAndUpdateVisibility()
+            if #available(macOS 15.0, *) {
+                warmupServices(model: model)
+            }
         }
     }
 
@@ -462,7 +461,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
         if #available(macOS 15.0, *) {
             let status = await model.refreshLanguageAvailabilityStatusForCurrentSettings(
-                retrySupportedStatus: !hasCompletedInitialLanguageAvailabilityCheck
+                retryTransientStatus: !hasCompletedInitialLanguageAvailabilityCheck
             )
             hasCompletedInitialLanguageAvailabilityCheck = true
             needsSettings = needsSettings || status != .installed

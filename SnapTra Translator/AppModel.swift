@@ -233,6 +233,11 @@ final class AppModel: ObservableObject {
     private let debugOverlayWindowController = DebugOverlayWindowController()
     private let paragraphHighlightWindowController = ParagraphHighlightWindowController()
     lazy var overlayWindowController = OverlayWindowController(model: self)
+    private let startupLanguageAvailabilityRetryDelays: [UInt64] = [
+        1_000_000_000,
+        2_000_000_000,
+        3_000_000_000,
+    ]
 
     @MainActor
     init(settings: SettingsStore? = nil, permissions: PermissionManager? = nil) {
@@ -290,7 +295,7 @@ final class AppModel: ObservableObject {
         }
         resolvedPermissions.refreshStatus()
         Task {
-            await checkLanguageAvailability()
+            await checkLanguageAvailability(notifyUser: false)
         }
     }
 
@@ -1107,7 +1112,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func checkLanguageAvailability() async {
+    private func checkLanguageAvailability(notifyUser: Bool = true) async {
         guard #available(macOS 15.0, *) else { return }
         let pairs = requiredLanguagePairsForCurrentSettings()
         let statusesByKey = await refreshedLanguageAvailabilityStatuses(
@@ -1124,6 +1129,8 @@ final class AppModel: ObservableObject {
 
         guard key != lastAvailabilityKey else { return }
         lastAvailabilityKey = key
+
+        guard notifyUser else { return }
 
         guard let firstUnavailable = pairs.lazy.compactMap({ pair in
             let status = statusesByKey[pair.key] ?? .unsupported
@@ -1204,14 +1211,21 @@ final class AppModel: ObservableObject {
 
     @available(macOS 15.0, *)
     func refreshLanguageAvailabilityStatusForCurrentSettings(
-        retrySupportedStatus: Bool = false
+        retryTransientStatus: Bool = false
     ) async -> LanguageAvailability.Status {
         let pair = resolveLookupLanguagePair()
         var status = await refreshLanguageAvailabilityStatus(for: pair)
 
-        if retrySupportedStatus, status == .supported {
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
+        guard retryTransientStatus, status != .installed else {
+            return status.translationStatus
+        }
+
+        for delay in startupLanguageAvailabilityRetryDelays {
+            try? await Task.sleep(nanoseconds: delay)
             status = await refreshLanguageAvailabilityStatus(for: pair)
+            if status == .installed {
+                break
+            }
         }
 
         return status.translationStatus

@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.6] - 2026-03-23
+
+### Added
+- add smart positioning for word translation panel
+
+### Changed
+- add sentence and paragraph translation features to documentation
+- fix GitHub repository URL in documentation
+
+### Fixed
+- avoid false alerts after login launch
+- sync language pack status on startup
+- add stable releases to both appcast files
+
+## [1.3.6-beta.2] - 2026-03-23
+
+### Added
+- add smart positioning for word translation panel
+
+## [1.3.6-beta.1] - 2026-03-22
+
+### Fixed
+- avoid false alerts after login launch
+
+## [1.3.6-beta.0] - 2026-03-22
+
+### Changed
+- add sentence and paragraph translation features to documentation
+- fix GitHub repository URL in documentation
+
+### Fixed
+- sync language pack status on startup
+- add stable releases to both appcast files
+
 ## [1.3.5] - 2026-03-17
 
 ### Added
