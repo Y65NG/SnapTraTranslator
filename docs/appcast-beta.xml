@@ -7,6 +7,15 @@
         <language>en</language>
         <sparkle:edPublicKey>OJo/oEqSjtmok1HYx+XgFHLq1FkUAJs8hsDms0+Uv98=</sparkle:edPublicKey>
         <item>
+            <title>Version 1.3.6</title>
+            <pubDate>Mon, 23 Mar 2026 06:42:49 +0000</pubDate>
+            <sparkle:version>13699</sparkle:version>
+            <sparkle:shortVersionString>1.3.6</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description>&lt;h2&gt;SnapTra Translator 1.3.6&lt;/h2&gt;&lt;h4&gt;Added&lt;/h4&gt;&lt;ul&gt;&lt;li&gt;add smart positioning for word translation panel&lt;/li&gt;&lt;/ul&gt;&lt;h4&gt;Changed&lt;/h4&gt;&lt;ul&gt;&lt;li&gt;add sentence and paragraph translation features to documentation&lt;/li&gt;&lt;li&gt;fix GitHub repository URL in documentation&lt;/li&gt;&lt;/ul&gt;&lt;h4&gt;Fixed&lt;/h4&gt;&lt;ul&gt;&lt;li&gt;avoid false alerts after login launch&lt;/li&gt;&lt;li&gt;sync language pack status on startup&lt;/li&gt;&lt;li&gt;add stable releases to both appcast files&lt;/li&gt;&lt;/ul&gt;</description>
+            <enclosure url="https://github.com/yelog/SnapTraTranslator/releases/download/v1.3.6/SnapTra-Translator-1.3.6.dmg" length="4958689" type="application/octet-stream" sparkle:edSignature="zjw4BUOF6q3NB/ST3VhXtYXq9bApCuHzlpUn3RfP2ht6ECF+korub11xEVBHKRG4YCxsN9WkgY13Gl0g4ss4CQ==" />
+        </item>
+        <item>
             <title>Version 1.3.6-beta.2</title>
             <pubDate>Mon, 23 Mar 2026 03:09:03 +0000</pubDate>
             <sparkle:version>13602</sparkle:version>
